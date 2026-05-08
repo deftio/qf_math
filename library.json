@@ -1,0 +1,33 @@
+{
+  "name": "qf_math",
+  "version": "1.0.0",
+  "description": "Fast approximate IEEE float32 math for embedded C99 (trig, log/exp, sqrt/hypot, waves, ADSR). Small flash footprint, no heap.",
+  "keywords": [
+    "math",
+    "float",
+    "embedded",
+    "trigonometry",
+    "log",
+    "exp",
+    "sqrt",
+    "dsp",
+    "audio",
+    "c99"
+  ],
+  "authors": [
+    {
+      "name": "M. A. Chatterjee",
+      "email": "deftio@deftio.com",
+      "maintainer": true
+    }
+  ],
+  "license": "BSD-2-Clause",
+  "frameworks": "*",
+  "platforms": "*",
+  "headers": "qf_math.h",
+  "build": {
+    "includeDir": "src",
+    "flags": ["-std=c99"],
+    "srcFilter": "+<src/qf_math.c>"
+  }
+}

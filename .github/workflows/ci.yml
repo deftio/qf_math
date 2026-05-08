@@ -1,0 +1,52 @@
+# CI for qf_math — tests, strict library build, 100% line coverage on src/qf_math.c,
+# and sync of an annotated git tag v<QF_MATH_VERSION> so the version appears under
+# the GitHub repo “Tags” / Releases sidebar when pushing to main.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Unit tests
+        run: make test
+
+      - name: Strict library build (-Wall -Werror)
+        run: make lib
+
+      - name: Coverage gate (100% lines in src/qf_math.c)
+        run: make coverage-check
+
+      - name: Read library version
+        id: ver
+        run: |
+          v=$(awk '/^#define QF_MATH_VERSION[[:space:]]/ {gsub(/"/,"",$3); print $3; exit}' src/qf_math.h)
+          echo "value=$v" >> "$GITHUB_OUTPUT"
+
+      - name: Push tag v${{ steps.ver.outputs.value }} (main only, if missing)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          set -euo pipefail
+          TAG="v${{ steps.ver.outputs.value }}"
+          git fetch --tags origin 2>/dev/null || true
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists — skipping."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "qf_math ${{ steps.ver.outputs.value }}" "$GITHUB_SHA"
+          git push origin "refs/tags/$TAG"

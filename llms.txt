@@ -1,0 +1,34 @@
+# llms.txt — qf_math
+
+> Machine-oriented index for `qf_math`: Quick Float Math (portable C99 float approximations).
+
+## Summary
+
+Single-file style library in `src/qf_math.c` + `src/qf_math.h`. Approximate trig, log/exp, sqrt/hypot, waves, ADSR. BSD-2-Clause. No runtime deps for the library TU.
+
+## Entry points
+
+- API / constants: `src/qf_math.h`
+- Implementation: `src/qf_math.c`
+- Host correctness tests (vs libm): `test/qf_math_test.c`
+- Bench vs libm only: `tools/qf_math_bench.c` → `make bench`
+- Multi-library compare + GitHub Markdown report: `compare/` → `make compare`, `make compare-github-report`
+- ESP32-S3 on-device compare loops (needs `make compare-deps`): `examples/lilygo_t_display_s3_bench/` (PlatformIO, LilyGO T-Display-S3) or `examples/esp32s3_benchmark/` (ESP-IDF)
+
+## Build
+
+- Primary: `Makefile` at repo root (`make test`, `make lib`, `make bench`, `make compare`, `make compare-report`, `make compare-github-report`, `make compare-tests`, `make docker-sizes`, `make mcu-benchmark-snapshot`).
+- Artifacts directory: `build/` (ignored by git); compare clones live in `build/compare/third_party/`.
+
+## Integration manifests
+
+- PlatformIO: `library.json`
+- ESP-IDF: `idf_component.yml`, `CMakeLists.txt` (component registration only)
+
+## Agent notes
+
+See `agents.md` for layout rules and safe edit boundaries.
+
+## Version
+
+`QF_MATH_VERSION` / `QF_MATH_VERSION_HEX` in `qf_math.h`.

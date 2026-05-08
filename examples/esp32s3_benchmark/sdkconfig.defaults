@@ -1,0 +1,7 @@
+# ESP32-S3 — run: idf.py set-target esp32s3 (writes sdkconfig target chips).
+#
+# benchmark_core.c uses ~32 KiB locals per function (8000 floats)
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=65536
+
+# Prefer speed for timing comparisons (trade ROM if needed)
+CONFIG_COMPILER_OPTIMIZATION_PERF=y

@@ -1,0 +1,8 @@
+/build/
+examples/esp32s3_benchmark/build/
+examples/esp32s3_benchmark/sdkconfig
+examples/esp32s3_benchmark/sdkconfig.old
+examples/lilygo_t_display_s3_bench/.pio/
+*.gcda
+*.gcno
+*.gcov

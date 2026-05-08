@@ -1,0 +1,6 @@
+version: "1.0.0"
+description: >-
+  Quick Float Math — approximate float32 routines (trig, log/exp, sqrt/hypot,
+  waveform helpers, ADSR) for Espressif ESP-IDF and other embedded targets.
+license: BSD-2-Clause
+dependencies: {}
