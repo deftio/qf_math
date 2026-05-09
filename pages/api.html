@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>qf_math API Reference</title>
+  <meta name="description" content="Complete API reference for all public symbols in qf_math.h — types, constants, macros, trig, log/exp, sqrt, hypot, waves, ADSR.">
+  <link rel="stylesheet" href="assets/main.css">
+</head>
+<body>
+
+<header id="site-header"></header>
+
+<main class="page-content">
+  <div class="wrapper">
+
+<h1>qf_math API Reference</h1>
+<p class="tagline">Complete reference for public symbols declared in <a href="https://github.com/deftio/qf_math/blob/main/src/qf_math.h"><code>src/qf_math.h</code></a>.</p>
+
+
+<h2>Type</h2>
+
+<pre><code>typedef float qf;</code></pre>
+
+<p>All library functions operate on IEEE-754 single-precision floats. The <code>qf</code> typedef makes the intent explicit and allows grepping for the API surface.</p>
+
+
+<h2>Constants</h2>
+
+<table class="qf-table">
+<thead><tr><th>Constant</th><th>Value</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>QF_PI</code></td><td>3.14159265</td><td>pi</td></tr>
+<tr><td><code>QF_TWO_PI</code></td><td>6.28318530</td><td>2 * pi</td></tr>
+<tr><td><code>QF_HALF_PI</code></td><td>1.57079632</td><td>pi / 2</td></tr>
+<tr><td><code>QF_E</code></td><td>2.71828182</td><td>Euler&rsquo;s number</td></tr>
+<tr><td><code>QF_INV_E</code></td><td>0.36787944</td><td>1 / e</td></tr>
+<tr><td><code>QF_INV_PI</code></td><td>0.31830988</td><td>1 / pi</td></tr>
+<tr><td><code>QF_DEG2RAD_K</code></td><td>0.01745329</td><td>pi / 180</td></tr>
+<tr><td><code>QF_RAD2DEG_K</code></td><td>57.2957795</td><td>180 / pi</td></tr>
+<tr><td><code>QF_LOG2E</code></td><td>1.44269504</td><td>log2(e)</td></tr>
+<tr><td><code>QF_LN2</code></td><td>0.69314718</td><td>ln(2)</td></tr>
+<tr><td><code>QF_LOG2_10</code></td><td>3.32192809</td><td>log2(10)</td></tr>
+<tr><td><code>QF_LOG10_2</code></td><td>0.30102999</td><td>log10(2)</td></tr>
+<tr><td><code>QF_SQRT2</code></td><td>1.41421356</td><td>sqrt(2)</td></tr>
+<tr><td><code>QF_INV_SQRT2</code></td><td>0.70710678</td><td>1 / sqrt(2)</td></tr>
+<tr><td><code>QF_SQRT3</code></td><td>1.73205080</td><td>sqrt(3)</td></tr>
+<tr><td><code>QF_INV_SQRT3</code></td><td>0.57735026</td><td>1 / sqrt(3)</td></tr>
+<tr><td><code>QF_SQRT5</code></td><td>2.23606797</td><td>sqrt(5)</td></tr>
+<tr><td><code>QF_SQRT10</code></td><td>3.16227766</td><td>sqrt(10)</td></tr>
+</tbody>
+</table>
+
+
+<h2>Conversion macros</h2>
+
+<h3>Fixed-radix bridge</h3>
+
+<pre><code>#define QF_TO_FR(val, radix)      // float -&gt; fixed-radix s32, truncating
+#define QF_TO_FR_RND(val, radix)  // float -&gt; fixed-radix s32, round-to-nearest
+#define FR_TO_QF(val, radix)      // fixed-radix s32 -&gt; float</code></pre>
+
+<p>Bridge between <code>qf</code> floats and <a href="https://github.com/deftio/fr_math">fr_math</a>-style <code>s32</code> integers at system boundaries (sensor input, DAC output, protocol fields).</p>
+
+<h3>Integer conversions</h3>
+
+<pre><code>#define QF_FROM_INT(x)   // int -&gt; qf
+#define QF_TO_INT(x)     // qf -&gt; int32_t (truncate)
+#define QF_ROUND(x)      // qf -&gt; int32_t (round-to-nearest)</code></pre>
+
+<h3>Angular conversions</h3>
+
+<pre><code>#define QF_DEG_TO_RAD(x)   // degrees -&gt; radians
+#define QF_RAD_TO_DEG(x)   // radians -&gt; degrees</code></pre>
+
+<h3>BAM (Binary Angular Measure) conversions</h3>
+
+<p>BAM is a <code>uint16_t</code> where one full revolution = 65536. Natural <code>uint16_t</code> wraparound handles modular arithmetic.</p>
+
+<pre><code>#define QF_BAM_TO_RAD(bam)   // BAM -&gt; radians
+#define QF_RAD_TO_BAM(rad)   // radians -&gt; BAM
+#define QF_BAM_TO_DEG(bam)   // BAM -&gt; degrees
+#define QF_DEG_TO_BAM(deg)   // degrees -&gt; BAM</code></pre>
+
+<table class="qf-table">
+<thead><tr><th>BAM value</th><th>Degrees</th><th>Radians</th></tr></thead>
+<tbody>
+<tr><td>0</td><td>0</td><td>0</td></tr>
+<tr><td>16384</td><td>90</td><td>pi/2</td></tr>
+<tr><td>32768</td><td>180</td><td>pi</td></tr>
+<tr><td>65536</td><td>wraps to 0</td><td>wraps to 0</td></tr>
+</tbody>
+</table>
+
+
+<h2>Utility macros</h2>
+
+<pre><code>#define QF_ABS(x)             // absolute value
+#define QF_SGN(x)             // sign: -1.0, 0.0, or 1.0
+#define QF_MIN(a, b)          // minimum
+#define QF_MAX(a, b)          // maximum
+#define QF_CLAMP(x, lo, hi)   // clamp x to [lo, hi]
+#define QF_INTERP(a, b, t)    // linear interpolation, t in [0, 1]</code></pre>
+
+
+<h2>Trigonometric functions</h2>
+
+<h3>BAM-native</h3>
+
+<pre><code>qf qf_sin_bam(uint16_t bam);
+qf qf_cos_bam(uint16_t bam);
+qf qf_tan_bam(uint16_t bam);</code></pre>
+
+<p>Input: BAM phase (0..65535 = one full cycle). Output: <code>[-1, 1]</code> for sin/cos; tangent saturates near poles to <code>QF_TAN_MAX</code>.</p>
+
+<h3>Radian input</h3>
+
+<pre><code>qf qf_sin(qf rad);
+qf qf_cos(qf rad);
+qf qf_tan(qf rad);</code></pre>
+
+<h3>Degree input</h3>
+
+<pre><code>qf qf_sin_deg(qf deg);
+qf qf_cos_deg(qf deg);
+qf qf_tan_deg(qf deg);</code></pre>
+
+<h3>Tangent pole clamp</h3>
+
+<pre><code>#define QF_TAN_MAX  8388608.0f</code></pre>
+
+<p>Exact poles return <code>QF_TAN_MAX</code>. Near-pole values clamp to +/- <code>QF_TAN_MAX</code>.</p>
+
+
+<h2>Inverse trigonometric functions</h2>
+
+<pre><code>qf qf_acos(qf x);   // domain [-1, 1], output [0, pi]
+qf qf_asin(qf x);   // domain [-1, 1], output [-pi/2, pi/2]
+qf qf_atan(qf x);   // output [-pi/2, pi/2]
+qf qf_atan2(qf y, qf x);  // output [-pi, pi]</code></pre>
+
+<p>Implementation uses cubic Hermite spans for <code>asin</code> on <code>[0, 3/4]</code>, <code>atan</code>-based fallback for <code>(3/4, 1)</code>, and six quadratic spans for <code>atan</code> on <code>[0, 1]</code> with reciprocal reduction for <code>x &gt; 1</code>. See <a href="algorithms.html">Algorithms</a> for details.</p>
+
+
+<h2>Logarithmic functions</h2>
+
+<pre><code>qf qf_log2(qf x);    // base-2 logarithm
+qf qf_ln(qf x);      // natural logarithm
+qf qf_log10(qf x);   // base-10 logarithm (excluded in lean build)</code></pre>
+
+<p>Returns <code>QF_DOMAIN_ERROR</code> for <code>x &lt;= 0</code>. <code>ln</code> and <code>log10</code> are derived from <code>log2</code> via constant multiplication.</p>
+
+
+<h2>Exponential functions</h2>
+
+<pre><code>qf qf_pow2(qf x);    // 2^x
+qf qf_exp(qf x);     // e^x
+qf qf_pow(qf x, qf y); // x^y, positive x only
+qf qf_pow10(qf x);   // 10^x (excluded in lean build)</code></pre>
+
+<p><code>exp</code> and <code>pow10</code> are derived from <code>pow2</code> via base conversion. <code>pow</code> is derived from <code>pow2(y * log2(x))</code> and returns <code>QF_DOMAIN_ERROR</code> for <code>x &lt;= 0</code>.</p>
+
+
+<h2>Square root and magnitude</h2>
+
+<pre><code>qf qf_sqrt(qf x);                 // sqrt(x), returns QF_DOMAIN_ERROR for x &lt; 0
+qf qf_hypot(qf x, qf y);         // sqrt(x^2 + y^2) via qf_sqrt
+qf qf_hypot_fast2(qf x, qf y);   // 2-segment piecewise-linear (~1.4% peak error)
+qf qf_hypot_fast8(qf x, qf y);   // 8-segment piecewise-linear (~0.10% peak error)</code></pre>
+
+<p><code>qf_hypot_fast8</code> uses the same algorithm as <code>FR_hypot_fast8</code> (based on US Patent 6,567,777 B1, Chatterjee, expired). No division required.</p>
+
+
+<h2>Wave generators</h2>
+
+<p>All take a <code>uint16_t</code> BAM phase (<code>0..65535</code> = one full cycle) and return <code>qf</code> in <code>[-1, 1]</code> (except <code>tri_morph</code>: <code>[0, 1]</code>). Excluded in lean build.</p>
+
+<pre><code>qf qf_wave_sqr(uint16_t phase);
+qf qf_wave_pwm(uint16_t phase, uint16_t duty);
+qf qf_wave_tri(uint16_t phase);
+qf qf_wave_saw(uint16_t phase);
+qf qf_wave_tri_morph(uint16_t phase, uint16_t break_point);
+qf qf_wave_noise(uint32_t *state);</code></pre>
+
+<h3>Phase increment helper</h3>
+
+<pre><code>#define QF_HZ2BAM_INC(hz, sample_rate)</code></pre>
+
+<p>Compute a per-sample BAM phase increment for a given frequency and sample rate:</p>
+
+<pre><code>uint16_t phase = 0;
+uint16_t inc = QF_HZ2BAM_INC(440, 48000);
+for (...) { sample = qf_sin_bam(phase); phase += inc; }</code></pre>
+
+
+<h2>ADSR envelope generator</h2>
+
+<p>Same lifecycle as fr_math&rsquo;s <code>fr_adsr_t</code> but with <code>qf</code> levels in <code>[0.0, 1.0]</code>. Excluded in lean build.</p>
+
+<pre><code>typedef struct qf_adsr_s {
+    uint8_t state;
+    qf      level;
+    qf      sustain;
+    qf      attack_inc;
+    qf      decay_dec;
+    qf      release_dec;
+} qf_adsr_t;
+
+void qf_adsr_init(qf_adsr_t *env,
+                   uint32_t attack_samples,
+                   uint32_t decay_samples,
+                   qf sustain_level,
+                   uint32_t release_samples);
+void qf_adsr_trigger(qf_adsr_t *env);
+void qf_adsr_release(qf_adsr_t *env);
+qf   qf_adsr_step(qf_adsr_t *env);</code></pre>
+
+<h3>State constants</h3>
+
+<table class="qf-table">
+<thead><tr><th>Constant</th><th>Value</th></tr></thead>
+<tbody>
+<tr><td><code>QF_ADSR_IDLE</code></td><td>0</td></tr>
+<tr><td><code>QF_ADSR_ATTACK</code></td><td>1</td></tr>
+<tr><td><code>QF_ADSR_DECAY</code></td><td>2</td></tr>
+<tr><td><code>QF_ADSR_SUSTAIN</code></td><td>3</td></tr>
+<tr><td><code>QF_ADSR_RELEASE</code></td><td>4</td></tr>
+</tbody>
+</table>
+
+<h3>Usage</h3>
+
+<pre><code>qf_adsr_t env;
+qf_adsr_init(&amp;env, 1000, 500, 0.7f, 2000);
+qf_adsr_trigger(&amp;env);
+for (...) sample *= qf_adsr_step(&amp;env);
+qf_adsr_release(&amp;env);
+for (...) sample *= qf_adsr_step(&amp;env);</code></pre>
+
+
+<h2>Domain error sentinel</h2>
+
+<pre><code>#define QF_DOMAIN_ERROR (-1.0e30f)</code></pre>
+
+<p>Returned by <code>qf_sqrt</code> (negative input), <code>qf_log2</code> / <code>qf_ln</code> / <code>qf_log10</code> (non-positive input). Not a NaN; compare with <code>==</code>.</p>
+
+
+<h2>Lean build mode</h2>
+
+<pre><code>#define QF_MATH_LEAN</code></pre>
+
+<p>Define before including <code>qf_math.h</code> (or pass <code>-DQF_MATH_LEAN</code> to the compiler) to compile the lean float core: radian trig, inverse trig, <code>log2</code>/<code>ln</code>, <code>pow2</code>/<code>exp</code>/<code>pow</code>, <code>sqrt</code>, and <code>qf_hypot_fast8</code>. It omits degree/BAM trig entry points, exact <code>qf_hypot</code>, <code>qf_hypot_fast2</code>, <code>log10</code>, <code>pow10</code>, wave generators, and ADSR.</p>
+
+<p>The compile-time flag <code>QF_MATH_LEAN_BUILD</code> is set to <code>1</code> when lean mode is active, <code>0</code> otherwise.</p>
+
+
+<h2>C++ wrapper (<code>qf_math.hpp</code>)</h2>
+
+<p><a href="https://github.com/deftio/qf_math/blob/main/src/qf_math.hpp"><code>src/qf_math.hpp</code></a> is a header-only C++ facade over the C API. It adds no storage, allocation, exceptions, RTTI, or new runtime dependencies.</p>
+
+<p>Everything lives in <code>namespace qf_math</code>:</p>
+
+<ul>
+  <li><strong>Type aliases:</strong> <code>qf_math::scalar</code> (<code>qf</code>), <code>qf_math::adsr_t</code> (<code>qf_adsr_t</code>)</li>
+  <li><strong>Constants:</strong> <code>qf_math::pi</code>, <code>qf_math::two_pi</code>, <code>qf_math::e</code>, etc.</li>
+  <li><strong>Free functions:</strong> <code>qf_math::sin()</code>, <code>qf_math::cos()</code>, <code>qf_math::sqrt()</code>, etc. &mdash; thin <code>inline</code> wrappers</li>
+  <li><strong>ADSR class:</strong> <code>qf_math::adsr</code> with <code>trigger()</code>, <code>release()</code>, <code>step()</code> methods</li>
+</ul>
+
+<pre><code>#include "qf_math.hpp"
+
+auto y = qf_math::sin(1.0f);
+auto len = qf_math::hypot(dx, dy);
+
+qf_math::adsr env(1000, 500, 0.7f, 2000);
+env.trigger();
+for (...) sample *= env.step();</code></pre>
+
+
+<h2>Version macros</h2>
+
+<pre><code>#define QF_MATH_VERSION      "1.0.1"
+#define QF_MATH_VERSION_HEX   0x010001</code></pre>
+
+  </div>
+</main>
+
+<footer id="site-footer"></footer>
+
+<script src="assets/site.js"></script>
+</body>
+</html>

@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>qf_math Algorithms</title>
+  <meta name="description" content="How qf_math works: table-driven trig, polynomial log/exp, Newton-Raphson sqrt, piecewise hypot, BAM phase system.">
+  <link rel="stylesheet" href="assets/main.css">
+</head>
+<body>
+
+<header id="site-header"></header>
+
+<main class="page-content">
+  <div class="wrapper">
+
+<h1>qf_math Algorithms</h1>
+<p class="tagline">How the numerical routines work under the hood.</p>
+
+
+<h2>Table-driven trigonometry</h2>
+
+<h3>Sine and cosine</h3>
+
+<p>A 512-entry full-cycle sine table (<code>gSIN_TAB</code>, 513 entries including sentinel) stores <code>sin(2*pi*k/512)</code> for <code>k = 0..512</code> as native <code>float</code> values. Cosine reuses the same table with a 90-degree (128-entry) phase offset.</p>
+
+<p>Lookup procedure:</p>
+
+<ol>
+  <li>Convert input (radians, degrees, or BAM) to a fixed-point BAM phase with 7 extra fractional bits (total 23 bits of phase).</li>
+  <li>Upper 9 bits select the table index; lower 14 bits form the fractional sub-step.</li>
+  <li>Linear interpolation between adjacent table entries:
+    <pre><code>out = lo + (hi - lo) * frac</code></pre>
+  </li>
+</ol>
+
+<p>The 7-bit BAM sub-step fractional system gives 128 interpolation steps between each pair of table entries, yielding effective resolution of 65536 steps per cycle (same as a 16-bit BAM).</p>
+
+<h3>Tangent</h3>
+
+<p>A separate 512-entry full-cycle tangent table (<code>gTAN_TAB</code>) with the same indexing scheme. Near poles (within ~3000 BAM of pi/2 or 3*pi/2), the table is bypassed and a reciprocal-based pole approximation is used:</p>
+
+<pre><code>raw = 1/angle - angle/3</code></pre>
+
+<p>This avoids table entries near singularities where linear interpolation would produce large errors. The result is clamped to <code>QF_TAN_MAX</code> (8388608.0).</p>
+
+<h3>Worst-case error</h3>
+
+<p>Sin/cos: ~0.01% of amplitude (vs double reference). Tangent: ~1.7% of amplitude, excluding near-pole regions.</p>
+
+
+<h2>BAM (Binary Angular Measure) phase system</h2>
+
+<p>Angles are represented internally as <code>uint16_t</code> BAM values where one full revolution = 65536. This gives several advantages for embedded systems:</p>
+
+<ul>
+  <li>Natural wraparound: <code>uint16_t</code> overflow handles modular arithmetic for free.</li>
+  <li>Integer-only phase accumulation for wave generators (no floating-point drift).</li>
+  <li>Direct table indexing without division.</li>
+</ul>
+
+<p>Conversion constants:</p>
+<ul>
+  <li><code>QF_BAM_PER_RAD</code> = 65536 / (2*pi) = 10430.378</li>
+  <li><code>QF_BAM_PER_DEG</code> = 65536 / 360 = 182.044</li>
+</ul>
+
+
+<h2>Inverse trigonometry</h2>
+
+<h3>asin / acos</h3>
+
+<p>The shared kernel <code>qf_asin_pos_kernel(ax)</code> computes <code>asin(|x|)</code> for <code>x</code> in <code>[0, 1]</code> using a multi-strategy approach:</p>
+
+<ol>
+  <li><strong>Small inputs</strong> (<code>|x| &lt; 0.084</code>): return <code>x</code> (asin(x) &asymp; x for small x).</li>
+  <li><strong>Three cubic Hermite spans</strong> on <code>[0, 3/4]</code> with knots at 0, 1/4, 1/2, 3/4. Each span uses C1-continuous Hermite basis functions (<code>h00</code>, <code>h10</code>, <code>h01</code>, <code>h11</code>) with precomputed endpoint values and derivatives.</li>
+  <li><strong>atan fallback</strong> for <code>(3/4, 1)</code>: <code>asin(x) = atan(x / sqrt(1 - x^2))</code> using the identity <code>1 - x^2 = (1-x)(1+x)</code> for numerical stability near 1. This avoids cubic Hermite overshoot on a span where <code>asin'(u)</code> grows unboundedly as <code>u -&gt; 1</code>.</li>
+  <li><strong>Tail approximation</strong> for <code>x &gt; 0.9975</code>: <code>asin(x) &asymp; pi/2 - sqrt(2(1-x))</code>.</li>
+</ol>
+
+<p><code>acos(x)</code> folds through <code>asin</code>: <code>acos(x) = pi/2 - asin(|x|)</code>, with sign adjustment for negative inputs.</p>
+
+<h3>atan / atan2</h3>
+
+<p><code>atan(x)</code> on <code>[0, 1]</code> uses six quadratic polynomial spans:</p>
+
+<ol>
+  <li>Multiply <code>x * 6</code> to select the span (each covers 1/6 of the unit interval).</li>
+  <li>Evaluate <code>(c2 * t + c1) * t + c0</code> with precomputed coefficients for each span.</li>
+  <li>For <code>x &gt; 1</code>: <code>atan(x) = pi/2 - atan(1/x)</code> using fast reciprocal.</li>
+</ol>
+
+<p><code>atan2(y, x)</code> uses ratio swaps and quadrant folds:</p>
+
+<ol>
+  <li>Compute <code>q1_angle = atan(min/max)</code> in the first quadrant.</li>
+  <li>If <code>|y| &gt; |x|</code>: <code>q1_angle = pi/2 - atan(|x|/|y|)</code>.</li>
+  <li>Map to correct quadrant based on signs of <code>x</code> and <code>y</code>.</li>
+</ol>
+
+
+<h2>Logarithms</h2>
+
+<h3>log2</h3>
+
+<p>Uses IEEE 754 float structure:</p>
+
+<ol>
+  <li>Extract the unbiased exponent field: <code>exp_raw = (bits &gt;&gt; 23) &amp; 0xFF - 127</code> (same as the integer part of <code>log2</code> for normals).</li>
+  <li><strong>Normal finite</strong> (<code>exp</code> bits not zero, not Infinity): fractional mantissa <code>M</code> yields <code>t = M / 2^23</code>; <code>log2(m) = log2(1+t)</code> approximated by a degree-7 Horner polynomial in <code>t</code> (no constant term, exact at <code>t = 0</code>).</li>
+  <li><strong>Subnormals, NaN, Inf</strong>, and edge patterns: reconstruct <code>m</code> in <code>[1, 2)</code> in float (implicit leading one), same as the legacy path, then evaluate the same polynomial on <code>m - 1</code>.</li>
+  <li>Result: <code>exp_raw + log2(m)</code>.</li>
+</ol>
+
+<h3>ln, log10</h3>
+
+<p>Derived from <code>log2</code> by constant multiplication:</p>
+<ul>
+  <li><code>ln(x) = log2(x) * ln(2)</code></li>
+  <li><code>log10(x) = log2(x) * log10(2)</code></li>
+</ul>
+
+
+<h2>Exponentials</h2>
+
+<h3>pow2</h3>
+
+<ol>
+  <li><strong>Nearest-int split</strong>: <code>x + (3&middot;2^22)</code> exploit &rarr; integer <code>n</code> and remainder <code>f</code> with <code>|f| &le; 0.5</code>; if unreliable, floor split and map <code>frac &isin; [0,1)</code> onto the polynomial range.</li>
+  <li><strong>Degree-5 Horner</strong> approximates <code>2^f</code> on <code>[-0.5, 0.5]</code>.</li>
+  <li><strong>Scale</strong>: add <code>n</code> to the IEEE exponent of the polynomial result when the sum stays in <code>[1, 254]</code>; otherwise <code>poly * make_pow2i(n)</code> (same caps as legacy <code>make_pow2i</code>).</li>
+</ol>
+
+<h3>exp, pow10</h3>
+
+<p>Derived from <code>pow2</code> by base conversion:</p>
+<ul>
+  <li><code>exp(x) = pow2(x * log2(e))</code></li>
+  <li><code>pow10(x) = pow2(x * log2(10))</code></li>
+</ul>
+
+
+<h2>Square root</h2>
+
+<p>Newton-Raphson iterations on the inverse square root:</p>
+
+<ol>
+  <li><strong>Initial estimate</strong> via the classic fast inverse square root technique (Quake III style):
+    <pre><code>conv.u = 0x5F375A86u - (conv.u &gt;&gt; 1);</code></pre>
+    The magic constant <code>0x5F375A86</code> provides a good initial <code>1/sqrt(x)</code> approximation by exploiting IEEE 754 float layout (the exponent field is roughly halved).
+  </li>
+  <li><strong>Two Newton-Raphson iterations</strong> for <code>1/sqrt(x)</code>:
+    <pre><code>y = y * (1.5 - 0.5 * x * y * y);</code></pre>
+  </li>
+  <li><strong>Final multiply</strong>: <code>sqrt(x) = x * (1/sqrt(x))</code>.</li>
+</ol>
+
+<p>Worst-case relative error: ~0.0005%.</p>
+
+
+<h2>Reciprocal</h2>
+
+<p>Newton-Raphson iterations with a magic constant initial estimate:</p>
+
+<pre><code>v.u = 0x7EF311C3u - v.u;   // initial 1/x estimate
+y = y * (2 - x * y);       // Newton-Raphson refinement</code></pre>
+
+<p>Three iterations for general use (<code>qf_inv_pos</code>), two iterations where reduced precision is acceptable (<code>qf_inv_pos_atan</code>).</p>
+
+
+<h2>Hypot variants</h2>
+
+<h3>qf_hypot (exact)</h3>
+
+<p>Direct computation: <code>sqrt(x*x + y*y)</code> via <code>qf_sqrt</code>.</p>
+
+<h3>qf_hypot_fast2 (2-segment piecewise)</h3>
+
+<p>Classifies <code>lo/hi</code> ratio into two regions and applies linear combination:</p>
+<ul>
+  <li><code>lo &gt; hi/2</code>: <code>0.814*hi + 0.592*lo</code></li>
+  <li>Otherwise: <code>0.986*hi + 0.236*lo</code></li>
+</ul>
+
+<p>Peak error: ~1.4%.</p>
+
+<h3>qf_hypot_fast8 (8-segment piecewise)</h3>
+
+<p>Based on US Patent 6,567,777 B1 (Chatterjee, expired).</p>
+
+<p>After sorting <code>|x|, |y|</code> into <code>hi, lo</code>, the ratio <code>beta = lo/hi</code> is classified into 8 segments using only comparisons against <code>hi</code> scaled by powers of two (no division):</p>
+
+<table class="qf-table">
+<thead><tr><th>Segment</th><th>beta range</th><th>a coefficient</th><th>b coefficient</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>(0.875, 1]</td><td>0.73046875</td><td>0.68359375</td></tr>
+<tr><td>2</td><td>(0.75, 0.875]</td><td>0.78027344</td><td>0.62622070</td></tr>
+<tr><td>3</td><td>(0.625, 0.75]</td><td>0.828125</td><td>0.56298828</td></tr>
+<tr><td>4</td><td>(0.5, 0.625]</td><td>0.87280273</td><td>0.48925781</td></tr>
+<tr><td>5</td><td>(0.375, 0.5]</td><td>0.91796875</td><td>0.3984375</td></tr>
+<tr><td>6</td><td>(0.25, 0.375]</td><td>0.95507813</td><td>0.29882813</td></tr>
+<tr><td>7</td><td>(0.125, 0.25]</td><td>0.98388672</td><td>0.18383789</td></tr>
+<tr><td>8</td><td>[0, 0.125]</td><td>0.99902344</td><td>0.06201172</td></tr>
+</tbody>
+</table>
+
+<p>Result: <code>a * hi + b * lo</code>. All coefficients are derived from shift-only expressions (sums of powers of two), making them exact in the binary representation.</p>
+
+<p>Peak error: ~0.10%.</p>
+
+
+<h2>Error budgets and worst-case accuracy</h2>
+
+<table class="qf-table">
+<thead><tr><th>Function</th><th>Error metric</th><th>Worst case</th></tr></thead>
+<tbody>
+<tr><td>sin/cos</td><td>% of amplitude</td><td>~0.01%</td></tr>
+<tr><td>tan</td><td>% of amplitude (excl. near-pole)</td><td>~1.7%</td></tr>
+<tr><td>acos</td><td>% of pi (radians)</td><td>~0.008%</td></tr>
+<tr><td>atan2</td><td>% of pi (radians)</td><td>~0.03%</td></tr>
+<tr><td>log2/ln</td><td>absolute delta vs double</td><td>~4.4e-05</td></tr>
+<tr><td>pow2/exp</td><td>relative vs double</td><td>~0.0015%</td></tr>
+<tr><td>sqrt</td><td>relative vs double</td><td>~0.0005%</td></tr>
+<tr><td>hypot</td><td>relative vs double</td><td>~0.0005%</td></tr>
+<tr><td>hypot_fast8</td><td>relative vs double</td><td>~0.14%</td></tr>
+</tbody>
+</table>
+
+<p>These figures are from host benchmarks (see <code>make bench</code> or the <a href="index.html">home page</a>). MCU results vary; always profile on the target silicon.</p>
+
+  </div>
+</main>
+
+<footer id="site-footer"></footer>
+
+<script src="assets/site.js"></script>
+</body>
+</html>

@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Float math tradeoffs — libm, qf_math, and fixed-point on embedded targets</title>
+  <meta name="description" content="Practical guide to choosing between vendor libm, approximate float (qf_math), and fixed-point (fr_math) for embedded firmware math.">
+  <link rel="stylesheet" href="assets/main.css">
+</head>
+<body>
+
+<header id="site-header"></header>
+
+<main class="page-content">
+  <div class="wrapper">
+
+<h1>Float math tradeoffs</h1>
+<p class="tagline">Choosing between vendor libm, approximate float, and fixed-point for embedded firmware.</p>
+
+<p>Most embedded projects need a handful of math functions &mdash; <code>sin</code>, <code>sqrt</code>, <code>log</code>, <code>exp</code>, maybe <code>atan2</code> &mdash; and the question is never <em>whether</em> an implementation exists but <em>which one</em> to link. The answer depends on the target silicon, the error budget, the flash budget, and whether the project can tolerate linking a vendor library whose internals are opaque. This page lays out the landscape and the reasoning behind each choice.</p>
+
+
+<h2>Three families of implementation</h2>
+
+<p>Firmware math on 32-bit MCUs falls into three broad categories:</p>
+
+<table class="qf-table">
+<thead><tr>
+  <th>Approach</th>
+  <th>Representation</th>
+  <th>Typical source</th>
+  <th>Accuracy class</th>
+  <th>Code size</th>
+</tr></thead>
+<tbody>
+<tr>
+  <td><strong>Vendor libm</strong></td>
+  <td>IEEE-754 <code>float</code>/<code>double</code></td>
+  <td>Toolchain (newlib, musl, ARM AEABI, Xtensa libm)</td>
+  <td>1&ndash;2 ULP (correctly rounded for most ops)</td>
+  <td>Variable; often pulled in piecemeal by the linker</td>
+</tr>
+<tr>
+  <td><strong>Approximate float</strong> (qf_math)</td>
+  <td>IEEE-754 <code>float</code></td>
+  <td>Application-linked single TU</td>
+  <td>~0.002% FS trig, ~0.001% rel log/exp</td>
+  <td>~9&ndash;10 KB <code>.text</code></td>
+</tr>
+<tr>
+  <td><strong>Fixed-point</strong> (fr_math, libfixmath)</td>
+  <td><code>int32_t</code> with implicit radix</td>
+  <td>Application-linked single TU</td>
+  <td>~0.008% FS trig, ~0.01&ndash;0.4% rel log/exp</td>
+  <td>~5&ndash;10 KB <code>.text</code></td>
+</tr>
+</tbody>
+</table>
+
+<p>None of these is universally better. Each trades something for something else. The rest of this page explains what gets traded and when it matters.</p>
+
+
+<h2>IEEE-754 float in thirty seconds</h2>
+
+<p>A 32-bit IEEE-754 <code>float</code> stores a sign bit, an 8-bit exponent, and a 23-bit mantissa (plus an implied leading 1). This gives roughly 7 decimal digits of precision across a range of about &plusmn;3.4 &times; 10<sup>38</sup>. The format is standardized, portable, and understood by every modern compiler.</p>
+
+<p>The catch: operating on floats requires either a hardware Floating-Point Unit (FPU) or a software emulation layer. When an FPU is present &mdash; Cortex-M4F, M7, M33, ESP32-S3, RP2350 &mdash; basic arithmetic (<code>+</code>, <code>-</code>, <code>*</code>, <code>/</code>) runs at near-integer speed. When it is absent &mdash; Cortex-M0, M0+, M3, many 8/16-bit targets &mdash; every float add or multiply becomes a multi-instruction software routine, typically 10&ndash;100&times; slower than the equivalent integer operation.</p>
+
+<p>Transcendental functions (<code>sin</code>, <code>log</code>, <code>exp</code>, <code>sqrt</code>) are never single instructions, even with an FPU. They are always implemented in software, and that is where the three families diverge.</p>
+
+
+<h2>Vendor libm: the safe default</h2>
+
+<p>The toolchain&rsquo;s math library &mdash; typically a variant of newlib, musl, or a vendor-tuned libm &mdash; provides <code>sinf</code>, <code>cosf</code>, <code>logf</code>, <code>sqrtf</code>, and so on. These implementations aim for correctly-rounded results (1&ndash;2 ULP error) and handle every IEEE-754 edge case: NaN propagation, infinities, signed zeros, denormals, <code>errno</code> setting.</p>
+
+<p>Advantages:</p>
+<ul>
+  <li>Accuracy is as good as <code>float</code> precision allows.</li>
+  <li>No source to maintain &mdash; the toolchain ships it.</li>
+  <li>On desktop and server CPUs, these are aggressively tuned (SIMD, branch prediction, large polynomial coefficients precomputed to Chebyshev optimality).</li>
+</ul>
+
+<p>Disadvantages:</p>
+<ul>
+  <li><strong>Code size is unpredictable.</strong> Linking <code>sinf</code> may pull in argument-reduction tables, polynomial coefficients, exception handling, and <code>errno</code> glue that add several KB to <code>.text</code>. On flash-constrained targets (&lt; 64 KB) this can matter.</li>
+  <li><strong>Execution cost is opaque.</strong> The function body is inside a prebuilt archive; without disassembling it, the cycle count per call is unknown. On a Cortex-M0 without an FPU, <code>sinf</code> via newlib can take thousands of cycles because every float multiply inside the polynomial evaluation is itself a soft-float call.</li>
+  <li><strong>Over-precision for the application.</strong> Many embedded pipelines work with 10&ndash;12-bit ADC readings, 8-bit PWM outputs, or 16-bit sensor data. Sub-ULP accuracy in the math layer is wasted when the signal itself has 0.1% noise.</li>
+</ul>
+
+<p>When to use it: libm is the right answer when accuracy requirements are tight, code size is not the binding constraint, and the target has a hardware FPU. Most of the time, starting with libm and measuring is sound practice &mdash; only replace it when measurement shows a problem.</p>
+
+
+<h2>Approximate float: qf_math&rsquo;s approach</h2>
+
+<p>qf_math keeps the <code>float</code> representation but replaces the transcendental implementations with simpler, smaller, faster approximations. The basic techniques:</p>
+
+<h3>Table-driven trig</h3>
+
+<p>A 512-entry sine lookup table covers one full period. Input angles are reduced to a Binary Angular Measure (BAM) phase, the table is indexed, and linear interpolation fills the gaps between entries. This trades 2 KB of ROM for a constant-time <code>sin</code>/<code>cos</code> that never branches on input magnitude. Worst-case error is about 0.002% of full-scale output (&plusmn;1).</p>
+
+<p>For comparison, a typical libm <code>sinf</code> uses a minimax polynomial (5&ndash;7 terms) with Cody-Waite argument reduction. The polynomial gives sub-ULP results, but each term is a float multiply-accumulate, and the argument reduction itself involves a conditional branch tree and a table of &pi;-related constants. On a soft-float target, every one of those multiplies is expensive.</p>
+
+<h3>Polynomial log and exp</h3>
+
+<p>qf_math splits the input into an integer exponent (extracted directly from the IEEE-754 bit pattern) and a fractional mantissa, then evaluates a short polynomial on the mantissa. For <code>log2</code>, this means a 4th-order polynomial on the range [1, 2). For <code>pow2</code>, a similar polynomial maps a [0, 1) fractional exponent back to a mantissa, then the integer part is reassembled into the IEEE-754 exponent field. The result is sub-0.001% relative error with no lookup table at all.</p>
+
+<h3>Newton-Raphson sqrt</h3>
+
+<p><code>qf_sqrt</code> uses the classic fast-inverse-square-root trick (a magic constant applied to the IEEE-754 bit pattern produces a rough initial estimate) followed by Newton-Raphson refinement iterations. Two iterations give about 0.0005% relative error. This is slower than a hardware <code>VSQRT</code> instruction on Cortex-M4F but faster than a soft-float <code>sqrtf</code> on Cortex-M0.</p>
+
+<h3>What gets given up</h3>
+
+<p>Accuracy, obviously &mdash; but in a controlled way. The worst-case errors are known and documented per function. More subtly:</p>
+<ul>
+  <li><strong>No IEEE edge-case compliance.</strong> Domain errors return a sentinel (<code>QF_DOMAIN_ERROR</code>) rather than setting <code>errno</code> or returning a quiet NaN. Denormal inputs may not be handled identically to libm.</li>
+  <li><strong>No <code>double</code> path.</strong> Everything operates in <code>float</code>. Applications that need 15-digit precision need a different library.</li>
+  <li><strong>Table ROM cost.</strong> The 512-entry sine table and 512-entry tangent table occupy about 4 KB of flash. On a 16 KB part, that is significant. The <code>QF_MATH_LEAN</code> build flag trims features (no <code>log10</code>/<code>pow10</code>, no waves, no ADSR) but the core tables remain.</li>
+</ul>
+
+
+<h2>Fixed-point: the integer alternative</h2>
+
+<p>Fixed-point math stores numbers as integers with an implicit scale factor (the <em>radix</em>): the value 3.5 at radix 16 is the integer 229376. All arithmetic is integer arithmetic. There is no exponent field, no implicit leading one, no denormals, and no FPU dependency.</p>
+
+<p><a href="https://github.com/deftio/fr_math">fr_math</a> is the fixed-point sibling of qf_math, sharing the same algorithmic heritage (same table layouts, BAM phase system, piecewise hypot, wave generators, ADSR envelope) but operating entirely in <code>int32_t</code>. <a href="https://github.com/PetteriAimonen/libfixmath">libfixmath</a> is another well-known fixed-point library using a Q16.16 format.</p>
+
+<p>For a detailed introduction to fixed-point concepts &mdash; radix selection, overflow hazards, Q notation, and worked examples &mdash; see the <a href="https://deftio.github.io/fr_math/pages/guide/fixed-point-primer.html">fr_math fixed-point primer</a>.</p>
+
+<p>Advantages:</p>
+<ul>
+  <li><strong>No FPU required.</strong> Integer multiply and shift are available on every target, including 8-bit and 16-bit parts.</li>
+  <li><strong>Deterministic and bit-exact.</strong> The same input always produces the same output, across compilers, optimization levels, and architectures. This matters for control loops, protocol checksums, and regression testing.</li>
+  <li><strong>Small code footprint.</strong> fr_math&rsquo;s lean build is about 5 KB. No soft-float runtime gets linked.</li>
+</ul>
+
+<p>Disadvantages:</p>
+<ul>
+  <li><strong>Limited dynamic range.</strong> A Q16.16 <code>int32_t</code> covers roughly &plusmn;32767 with 16 fractional bits. Signals outside that range require radix changes or wider storage. <code>float</code> spans &plusmn;3.4 &times; 10<sup>38</sup> without manual scaling.</li>
+  <li><strong>Overflow is silent.</strong> C does not trap integer overflow on signed types (it is undefined behavior in theory, wrapping in practice). The programmer must track value ranges and guard against it. fr_math provides saturating variants, but using them correctly requires understanding the radix math.</li>
+  <li><strong>Bridge cost when mixing with float.</strong> If the rest of the firmware uses <code>float</code> (sensor drivers, display code, communication stacks), converting back and forth at every boundary adds overhead and code. The benchmark tables in <a href="https://github.com/deftio/qf_math/blob/main/compare/BENCHMARK_CROSSPLATFORM.md">BENCHMARK_CROSSPLATFORM.md</a> show this: fr_math&rsquo;s &ldquo;speed vs libm&rdquo; ratios include float&harr;fixed conversion cost that would not exist in a pure-integer pipeline.</li>
+</ul>
+
+
+<h2>The decision in practice</h2>
+
+<p>A few rules of thumb that hold across most projects:</p>
+
+<table class="qf-table">
+<thead><tr>
+  <th>Situation</th>
+  <th>Likely best choice</th>
+  <th>Reason</th>
+</tr></thead>
+<tbody>
+<tr>
+  <td>Cortex-M4F / M7 / M33 / ESP32 with single-precision FPU</td>
+  <td>Start with <strong>libm</strong>; switch to <strong>qf_math</strong> if code size or cycle count is the bottleneck</td>
+  <td>Hardware float makes arithmetic cheap; the question is only the transcendental implementation cost.</td>
+</tr>
+<tr>
+  <td>Cortex-M0 / M0+ / M3 (no FPU)</td>
+  <td><strong>fr_math</strong> or <strong>libfixmath</strong></td>
+  <td>Every float operation is soft-float. Fixed-point avoids that entirely.</td>
+</tr>
+<tr>
+  <td>8/16-bit MCU (AVR, PIC, MSP430)</td>
+  <td><strong>fr_math</strong> (with appropriate radix)</td>
+  <td>32-bit integers are the widest native type; float is prohibitively expensive.</td>
+</tr>
+<tr>
+  <td>Mixed pipeline: float sensors + integer control loop</td>
+  <td><strong>qf_math</strong> for the float side, <strong>fr_math</strong> for the integer side, bridge macros at the boundary</td>
+  <td><code>QF_TO_FR</code> / <code>FR_TO_QF</code> macros convert between representations.</td>
+</tr>
+<tr>
+  <td>Bit-exact reproducibility required (protocol, golden-vector test)</td>
+  <td><strong>fr_math</strong></td>
+  <td>Integer arithmetic is deterministic across toolchains. Float results can vary with <code>-ffast-math</code>, FMA contraction, or different libm implementations.</td>
+</tr>
+<tr>
+  <td>Wide dynamic range (audio dB, scientific telemetry)</td>
+  <td><strong>qf_math</strong> or <strong>libm</strong></td>
+  <td>Float&rsquo;s exponent field handles 10<sup>38</sup> without manual scaling.</td>
+</tr>
+</tbody>
+</table>
+
+
+<h2>Error budgets: how much accuracy is enough</h2>
+
+<p>The answer depends on the application, not the math library. A few reference points:</p>
+
+<ul>
+  <li>A <strong>12-bit ADC</strong> has an LSB of ~0.024% of full scale. Math that introduces less error than one LSB is effectively transparent.</li>
+  <li>A <strong>16-bit DAC</strong> has an LSB of ~0.0015% FS. qf_math trig (0.002% FS worst case) is right at this boundary; libm is safely below it.</li>
+  <li><strong>Motor commutation</strong> typically needs &lt; 1&deg; of electrical angle error (~0.3% FS in sine terms). Both qf_math and fr_math are well inside this.</li>
+  <li><strong>Audio synthesis</strong> at 16-bit depth has a noise floor of about &minus;96 dB. qf_math&rsquo;s trig accuracy (&minus;94 dB or better) is borderline; for production audio paths, libm or a dedicated wavetable with interpolation may be warranted.</li>
+  <li><strong>LED dimming</strong>, <strong>PID loops</strong>, <strong>display graphics</strong>, and <strong>sensor fusion</strong> are typically well within the 0.01% class and tolerant of either library.</li>
+</ul>
+
+<p>The general principle: start from the output resolution and work backward. If the final actuator has 10-bit precision, spending cycles on sub-ULP math is waste.</p>
+
+
+<h2>Where the speed difference comes from</h2>
+
+<p>On a desktop x86-64, vendor <code>sinf</code> and qf_math <code>qf_sin</code> are often within 2&times; of each other because the CPU has deep pipelines, branch prediction, out-of-order execution, and hardware FMA that make polynomial evaluation cheap. The libm implementation is tuned for that hardware.</p>
+
+<p>On an embedded Cortex-M or Xtensa, the balance shifts:</p>
+
+<ul>
+  <li><strong>Simpler pipelines.</strong> Branch mispredictions are cheaper but still nonzero, and most MCU cores are in-order. A branchless table lookup with linear interpolation has more predictable throughput than a polynomial with conditional argument reduction.</li>
+  <li><strong>No hardware FMA.</strong> Many M4F cores have a fused multiply-add instruction, but the libm shipped with the toolchain may not exploit it (newlib-nano, for instance, is compiled with conservative flags). qf_math&rsquo;s simpler expressions may actually pipeline better.</li>
+  <li><strong>Fewer cache levels.</strong> On a desktop, a 4 KB sine table fits in L1 and is fast. On an MCU with single-cycle flash or tightly coupled memory, it is equally fast. The table approach does not get worse on smaller targets the way branch-heavy polynomial code can.</li>
+  <li><strong>Soft-float amplification.</strong> On a Cortex-M0, every float multiply inside a libm polynomial is a call to <code>__aeabi_fmul</code>. A 7-term polynomial means 7 soft-float multiplies plus accumulates. qf_math&rsquo;s table lookup with one interpolation multiply reduces this to 1&ndash;2 soft-float operations.</li>
+</ul>
+
+<p>The ESP32-S3 benchmark data illustrates this concretely: <code>qf_sin</code> is <strong>4.3&times;</strong> faster than <code>sinf</code> on the same chip, even though both use hardware float. The speedup comes from replacing a ~20-operation polynomial with a table fetch and one multiply.</p>
+
+
+<h2>Code size: what actually ships</h2>
+
+<p>On flash-constrained targets, the relevant number is not the library&rsquo;s total size but the <code>.text</code> that makes it into the final binary after the linker discards unused symbols.</p>
+
+<table class="qf-table">
+<thead><tr>
+  <th>Library</th>
+  <th>Variant</th>
+  <th>Bytes (<code>.text</code>)</th>
+  <th>Notes</th>
+</tr></thead>
+<tbody>
+<tr>
+  <td>qf_math</td>
+  <td>full</td>
+  <td>~10 KB</td>
+  <td>All functions, tables, waves, ADSR</td>
+</tr>
+<tr>
+  <td>qf_math</td>
+  <td>lean (<code>-DQF_MATH_LEAN</code>)</td>
+  <td>~9 KB</td>
+  <td>Core math only; no <code>log10</code>/<code>pow10</code>, waves, ADSR</td>
+</tr>
+<tr>
+  <td>fr_math</td>
+  <td>full</td>
+  <td>~10 KB</td>
+  <td>All functions including print helpers</td>
+</tr>
+<tr>
+  <td>fr_math</td>
+  <td>lean (<code>-DFR_LEAN</code>)</td>
+  <td>~5 KB</td>
+  <td>Core math only; no degree/BAM wrappers, waves, ADSR, print</td>
+</tr>
+<tr>
+  <td>libfixmath</td>
+  <td>bench subset</td>
+  <td>~3.6 KB</td>
+  <td>Trig + sqrt + exp + core only</td>
+</tr>
+<tr>
+  <td>Vendor libm</td>
+  <td>(varies)</td>
+  <td>2&ndash;20+ KB</td>
+  <td>Depends on which functions are referenced; hidden transitive pulls are common</td>
+</tr>
+</tbody>
+</table>
+
+<p>One subtlety with libm: calling <code>sinf</code> may pull in argument-reduction code that references <code>__ieee754_rem_pio2f</code>, which in turn pulls in a table of &pi;/2 coefficients, which pulls in <code>__kernel_cosf</code>, and so on. The total linked size can be 3&ndash;5&times; what a single function&rsquo;s source would suggest. qf_math and fr_math avoid this by design &mdash; everything is one translation unit with no internal cross-references to other compilation units.</p>
+
+
+<h2>Mixing libraries in one project</h2>
+
+<p>There is no rule against using more than one math source in the same firmware image. A common pattern:</p>
+
+<ul>
+  <li>Use <strong>vendor libm</strong> for initialization-time calculations (calibration curves, coordinate transforms computed once) where speed is irrelevant and accuracy matters.</li>
+  <li>Use <strong>qf_math</strong> in the real-time loop (motor commutation, audio synthesis, display rendering) where throughput and determinism are the constraints.</li>
+  <li>Use <strong>fr_math</strong> for any integer-only subsystem (protocol encoding, fixed-radix PID, bit-exact logging).</li>
+</ul>
+
+<p>The <code>QF_TO_FR(float_val, radix)</code> and <code>FR_TO_QF(fixed_val, radix)</code> macros in qf_math.h bridge the two representations at the boundary. The conversion cost is a float-to-int cast and a shift (or the reverse), which on an FPU-equipped core is one or two instructions.</p>
+
+
+
+<h2>Postscript: DSP libraries, SIMD, and vendor-tuned math</h2>
+
+<p>The three families above cover general-purpose scalar math. Several other categories exist and are worth understanding even if they serve different niches.</p>
+
+<h3>CMSIS-DSP (ARM)</h3>
+
+<p>ARM&rsquo;s <a href="https://arm-software.github.io/CMSIS-DSP/latest/">CMSIS-DSP</a> ships as part of the CMSIS ecosystem and provides optimized math for Cortex-M targets. It includes fast trig (<code>arm_sin_f32</code>, <code>arm_cos_f32</code>), vector operations, FFT, FIR/IIR filters, and matrix routines. The scalar trig functions use table-lookup with cubic interpolation, similar in spirit to qf_math but tuned for the Cortex-M instruction set.</p>
+
+<p>CMSIS-DSP is large (~40 KB+ for the full library) but modular &mdash; individual function groups can be linked selectively. Its real strength is <strong>batch processing</strong>: the filter, FFT, and matrix functions operate on arrays and exploit the Cortex-M&rsquo;s hardware loop and saturation instructions. For scalar one-off <code>sin(x)</code> calls, it offers little advantage over qf_math or libm.</p>
+
+<h3>ESP-DSP (Espressif)</h3>
+
+<p><a href="https://github.com/espressif/esp-dsp">ESP-DSP</a> provides signal-processing primitives for ESP32 targets, including dot products, FFT, and FIR/IIR filters. Some functions use the Xtensa HiFi DSP extensions where available. Scalar math functions are minimal &mdash; the benchmark harness in this repo tests ESP-DSP&rsquo;s <code>dsps_sqrtf_ansi</code> as a standalone wrapper, but most of the library&rsquo;s value is in its batch/vector operations.</p>
+
+<h3>SIMD and vectorized math</h3>
+
+<p>On larger ARM cores (Cortex-A with NEON) and on x86 (SSE/AVX), SIMD intrinsics or auto-vectorized loops can compute 4 or 8 <code>sin</code> values in parallel. Libraries like <a href="https://sleef.org/">SLEEF</a> and Intel&rsquo;s SVML provide vectorized transcendentals. These are extremely fast for batch workloads (signal processing, graphics pipelines, physics engines) but are irrelevant on Cortex-M &mdash; there is no SIMD unit.</p>
+
+<p>The Cortex-M4&rsquo;s &ldquo;DSP extensions&rdquo; (SIMD-style 8&times;8 and 16&times;16 multiply-accumulate) operate on integer data and are useful for fixed-point FIR filters but do not help with scalar float transcendentals.</p>
+
+<h3>Vendor-tuned libm variants</h3>
+
+<p>Some toolchain vendors ship math libraries optimized for their specific silicon:</p>
+<ul>
+  <li><strong>ARM Optimized Routines</strong> (<code>libmathlib</code>) &mdash; replacements for newlib&rsquo;s <code>sinf</code>, <code>cosf</code>, <code>logf</code>, etc., tuned for AArch64 and increasingly for Cortex-M. These can be 2&ndash;5&times; faster than stock newlib while maintaining correctly-rounded accuracy.</li>
+  <li><strong>TI C2000 FPU FastRTS</strong> &mdash; ROM-resident fast-math routines for TI&rsquo;s real-time MCUs, callable as drop-in replacements for libm symbols.</li>
+  <li><strong>Microchip dsPIC libm</strong> &mdash; tuned for the dsPIC&rsquo;s 16-bit DSP engine with hardware loop and barrel shifter.</li>
+</ul>
+
+<p>These are worth investigating when targeting a specific vendor&rsquo;s silicon and toolchain. The tradeoff is vendor lock-in: the optimized routines are not portable across architectures.</p>
+
+<h3>Hardware math instructions</h3>
+
+<p>A few MCU-level instructions deserve mention because they affect the cost baseline:</p>
+
+<table class="qf-table">
+<thead><tr>
+  <th>Instruction</th>
+  <th>Available on</th>
+  <th>Effect</th>
+</tr></thead>
+<tbody>
+<tr>
+  <td><code>VSQRT.F32</code></td>
+  <td>Cortex-M4F, M7, M33</td>
+  <td>Single-precision square root in ~14 cycles. Faster than any software <code>sqrt</code>.</td>
+</tr>
+<tr>
+  <td><code>VDIV.F32</code></td>
+  <td>Cortex-M4F, M7, M33</td>
+  <td>Single-precision divide in ~14 cycles. Faster than Newton-Raphson reciprocal.</td>
+</tr>
+<tr>
+  <td><code>VFMA.F32</code></td>
+  <td>Cortex-M4F, M7, M33</td>
+  <td>Fused multiply-accumulate. Eliminates one rounding step in polynomial evaluation.</td>
+</tr>
+<tr>
+  <td>None (soft-float)</td>
+  <td>Cortex-M0, M0+, M3</td>
+  <td>All float ops are function calls (~20&ndash;70 cycles each). Fixed-point wins here.</td>
+</tr>
+</tbody>
+</table>
+
+<p>When hardware <code>VSQRT</code> is available, <code>qf_sqrt</code> will not beat it &mdash; the benchmark data confirms this (<code>qf_sqrt</code> is ~0.39&times; libm speed on a desktop, where <code>sqrtf</code> compiles to a single SSE instruction). The value of <code>qf_sqrt</code> is on targets <em>without</em> that instruction. The same reasoning applies to <code>VDIV</code>: if division is a single-cycle instruction, Newton-Raphson reciprocal approximation is slower.</p>
+
+<h3>When to look beyond scalar libraries</h3>
+
+<p>If the workload is inherently <strong>batched</strong> &mdash; computing <code>sin</code> for 256 samples per audio frame, applying a 64-tap FIR filter, running a 1024-point FFT &mdash; then CMSIS-DSP, ESP-DSP, or hand-written SIMD/DMA routines will outperform any scalar library by a wide margin. qf_math, fr_math, and libm are designed for <strong>scalar, per-sample</strong> operations: one <code>sin</code> call per control-loop tick, one <code>atan2</code> per sensor reading, one <code>sqrt</code> per distance calculation.</p>
+
+<p>In many embedded projects, the two coexist naturally: a DSP library handles the signal-processing pipeline, and a scalar math library handles the control logic, UI calculations, and calibration routines.</p>
+
+  </div>
+</main>
+
+<footer id="site-footer"></footer>
+
+<script src="assets/site.js"></script>
+</body>
+</html>

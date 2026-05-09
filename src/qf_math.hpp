@@ -55,15 +55,19 @@ inline int32_t to_fr(scalar x, int radix) noexcept { return QF_TO_FR(x, radix); 
 inline int32_t to_fr_round(scalar x, int radix) noexcept { return QF_TO_FR_RND(x, radix); }
 inline scalar from_fr(int32_t x, int radix) noexcept { return FR_TO_QF(x, radix); }
 
+#if !QF_MATH_LEAN_BUILD
 inline scalar sin_bam(uint16_t bam) noexcept { return ::qf_sin_bam(bam); }
 inline scalar cos_bam(uint16_t bam) noexcept { return ::qf_cos_bam(bam); }
 inline scalar tan_bam(uint16_t bam) noexcept { return ::qf_tan_bam(bam); }
+#endif
 inline scalar sin(scalar rad) noexcept { return ::qf_sin(rad); }
 inline scalar cos(scalar rad) noexcept { return ::qf_cos(rad); }
 inline scalar tan(scalar rad) noexcept { return ::qf_tan(rad); }
+#if !QF_MATH_LEAN_BUILD
 inline scalar sin_deg(scalar deg) noexcept { return ::qf_sin_deg(deg); }
 inline scalar cos_deg(scalar deg) noexcept { return ::qf_cos_deg(deg); }
 inline scalar tan_deg(scalar deg) noexcept { return ::qf_tan_deg(deg); }
+#endif
 
 inline scalar acos(scalar x) noexcept { return ::qf_acos(x); }
 inline scalar asin(scalar x) noexcept { return ::qf_asin(x); }
@@ -83,8 +87,10 @@ inline scalar pow10(scalar x) noexcept { return ::qf_pow10(x); }
 #endif
 
 inline scalar sqrt(scalar x) noexcept { return ::qf_sqrt(x); }
+#if !QF_MATH_LEAN_BUILD
 inline scalar hypot(scalar x, scalar y) noexcept { return ::qf_hypot(x, y); }
 inline scalar hypot_fast2(scalar x, scalar y) noexcept { return ::qf_hypot_fast2(x, y); }
+#endif
 inline scalar hypot_fast8(scalar x, scalar y) noexcept { return ::qf_hypot_fast8(x, y); }
 
 #if !QF_MATH_LEAN_BUILD

@@ -70,7 +70,7 @@ echo
 echo "| Library | Variant | Bytes (dec) | What is counted |"
 echo "| :--- | :--- | ---:|:---|"
 echo "| **qf_math** | full | ${DQF} | Single TU \`qf_math.o\` at \`-Os\` (same as \`make lib\`). |"
-echo "| **qf_math** | lean | ${DQFL} | \`qf_math.o\` with \`-DQF_MATH_LEAN\`: rad/deg/BAM trig, inverse trig, \`log2\`/\`ln\`, \`pow2\`/\`exp\`/\`pow\`, \`sqrt\`, \`hypot\`/\`hypot_fast2\`/\`hypot_fast8\` — no \`log10\`/\`pow10\`, waves, or ADSR (see \`qf_math.h\`). |"
+echo "| **qf_math** | lean | ${DQFL} | \`qf_math.o\` with \`-DQF_MATH_LEAN\`: radian trig, inverse trig, \`log2\`/\`ln\`, \`pow2\`/\`exp\`/\`pow\`, \`sqrt\`, and \`hypot_fast8\` — no degree/BAM trig entry points, exact \`hypot\`, \`hypot_fast2\`, \`log10\`/\`pow10\`, waves, or ADSR (see \`qf_math.h\`). |"
 echo "| **libfixmath** | bench subset | ${SUM_LF} | Sum of the \`lf_*.o\` objects from **Makefile** \`LIBFIXMATH_SRCS\` (trig + sqrt + exp + fix16 core) — only what the compare harness links. |"
 echo "| **fr_math** | full | ${DFRF} | \`FR_math.c\` at \`-Os\` with default feature set. |"
 echo "| **fr_math** | lean | ${DFRL} | \`FR_math.c\` with \`-DFR_LEAN -DFR_NO_PRINT\`: radian trig, inverse trig, log/exp, sqrt; omits degree/BAM wrappers, hypot, waves/ADSR, and print helpers. |"

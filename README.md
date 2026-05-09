@@ -1,28 +1,99 @@
 [![License](https://img.shields.io/badge/License-BSD%202--Clause-blue.svg)](https://opensource.org/licenses/BSD-2-Clause)
 [![CI](https://github.com/deftio/qf_math/actions/workflows/ci.yml/badge.svg)](https://github.com/deftio/qf_math/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen.svg)](#coverage-gate)
-[![Docs](https://img.shields.io/badge/docs-compare%20%26%20bench-blue.svg)](compare/README.md)
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](src/qf_math.h)
+[![Version](https://img.shields.io/badge/version-1.0.1-blue.svg)](src/qf_math.h)
 [![GitHub](https://img.shields.io/badge/GitHub-repo-181717.svg?logo=github)](https://github.com/deftio/qf_math)
-   
+
 [![PlatformIO](https://img.shields.io/badge/PlatformIO-library-teal.svg)](https://registry.platformio.org/libraries/deftio/qf_math)
 [![Arduino](https://img.shields.io/badge/Arduino-from%20source-teal.svg)](https://github.com/deftio/qf_math)
 [![ESP-IDF](https://img.shields.io/badge/ESP--IDF-component-teal.svg)](https://components.espressif.com/components/deftio/qf_math)
 
 # Quick Float Math (`qf_math`)
 
-**qf_math** is a compact, dependency-free C99 library for **fast approximate math on IEEE-754 `float`**. It targets embedded firmware where you want predictable cost and small flash footprint: table-driven trig, logarithms, exponentials, `sqrt`, `hypot`, waveform helpers, and a floating-point ADSR envelope—without pulling in full libm semantics on platforms where that matters.
+**qf_math** is a lightweight library for **fast approximate math on IEEE-754 `float`** — built for ARM Cortex-M, RISC-V, Xtensa/ESP32, and any 32-bit target. One translation unit, no heap, no dependencies, no FPU required (but benefits from one). Drop it into firmware for predictable-cost trig, log, exp, sqrt, hypot, waveforms, and ADSR — without pulling in full libm.
 
-[fr_math](github.com/deftio/fr_math) is the fixed point (pure integer) cousin of this library with identical apis.
+**[fr_math](https://github.com/deftio/fr_math)** is the **fixed-point (pure integer)** cousin with the same API family.
+
+
+## Float or fixed-point?
+
+| | **qf_math** (this library) | **[fr_math](https://github.com/deftio/fr_math)** |
+|---|---|---|
+| **Representation** | IEEE-754 `float` (32-bit) | Q16.16 fixed-point (`int32_t`) |
+| **Best on** | Cortex-M4F/M7, ESP32, RP2040/RP2350 with FPU | Cortex-M0/M3, 8/16-bit MCUs, no-FPU targets |
+| **Soft-float cost** | High (compiler inserts sw multiply/add) | Zero (integer ALU only) |
+| **Dynamic range** | ~1e-38 to ~3e+38 | ~-32768 to ~+32767.9999 |
+| **Typical accuracy** | < 0.002% FS (trig), < 0.001% rel (log/exp) | < 0.008% FS (trig), < 0.4% rel (log/exp) |
+| **Code size** | ~10 KB (full), ~9 KB (lean) | ~10 KB (full), ~5 KB (lean) |
+
+
+## Accuracy — qf_math vs fr_math vs libm
+
+Peak error from identical benchmark grids. Both libraries use the same approximation strategies (BAM phase, sub-step interpolation, piecewise hypot) — the accuracy difference comes from float vs fixed-point arithmetic.
+
+| Function | Metric | libm | **qf_math** | **fr_math** |
+|:---------|:-------|-----:|------------:|------------:|
+| sin (rad) | %FS | 0 | **0.0019** | 0.0078 |
+| cos (rad) | %FS | 0 | **0.0019** | 0.0087 |
+| tan (rad) | abs | 0 | 0.30 | **0.051** |
+| asin | abs rad | 0 | 0.00047 | **0.00036** |
+| acos | abs rad | 0 | 0.00047 | **0.00036** |
+| atan2 | abs rad | 0 | 0.0013 | **0.00094** |
+| sqrt | rel % | 0 | **0.00047** | 1.19 |
+| log2 | rel % | 0 | **0.0016** | 0.32 |
+| exp | rel % | 0 | **0.00034** | 0.57 |
+| pow | rel % | 0 | **0.00038** | 0.087 |
+| hypot | rel % | 0 | **0.00047** | 0.000007 |
+
+> **%FS** = % of full-scale (±1 output for trig). **rel %** = relative error vs `double` reference. **abs rad** = absolute radians. Bold = closer to libm. `libm` column is the `*f` reference (effectively 0 error at this precision).
+
+
+## Speed vs libm — ESP32-S3 (with FPU)
+
+Ratio of libm wall-clock time to library time for the same loop. **> 1.0** = faster than `sinf`/`sqrtf`/etc. on that platform. ESP32-S3 has a single-precision FPU, so both `qf_math` and `libm` use hardware float — the advantage comes from simpler approximations with fewer branches.
+
+| Function | **qf_math** | **fr_math** | Notes |
+|:---------|------------:|------------:|:------|
+| sin (rad) | **4.30**× | 1.32× | qf_math: table + lerp; fr_math: integer table via float bridge |
+| cos (rad) | **4.39**× | 0.90× | |
+| tan (rad) | **3.56**× | 1.31× | |
+| asin | 1.10× | 0.77× | |
+| acos | 1.11× | 0.77× | |
+| atan2 | **1.41**× | 0.70× | |
+| sqrt | 1.07× | 0.08× | libm sqrtf is hard to beat (HW instruction on many cores) |
+| exp | **2.63**× | 1.88× | |
+| ln | **2.20**× | 0.92× | |
+| hypot | **2.51**× | 0.21× | fr_math hypot goes through float bridge overhead |
+
+> **fr_math** numbers include **float↔fixed bridge overhead** — native `s32` / `fix16_t` calls in a pure-integer pipeline are faster. See [`compare/BENCHMARK_CROSSPLATFORM.md`](compare/BENCHMARK_CROSSPLATFORM.md) for full matrices including libfixmath, FastTrig, and ESP-DSP.
+
+
+## Quick start
+
+```c
+#include "qf_math.h"
+
+qf y   = qf_sin(1.0f);            /* radians */
+qf len = qf_hypot(dx, dy);
+qf dB  = 20.0f * qf_log10(v / ref);
+```
 
 | | |
 |---|---|
 | **Language** | C99 (`float` API, `qf` typedef), plus optional C++ header wrapper |
 | **Dependencies** | None at compile time for the library itself |
 | **License** | BSD-2-Clause — see `LICENSE.txt` |
-| **Layout** | `src/` library · `test/` unit tests · `build/` all binaries & fetched third-party sources |
 
 Version macros live in [`qf_math.h`](src/qf_math.h): `QF_MATH_VERSION` / `QF_MATH_VERSION_HEX`. When you bump the version string, update the **Version** badge at the top of this README to match.
+
+For releases, prefer the version/release helpers so manifests, docs, badges, pages, and generated reports stay in sync:
+
+```bash
+python3 tools/qf_version.py show --format markdown
+python3 tools/qf_version.py update 1.0.2
+make make-release VERSION=1.0.2
+make make-release RELEASE_ARGS="--dry-run --skip-docker --skip-peer-tests"
+```
 
 
 ## Why use this?
@@ -33,9 +104,19 @@ Version macros live in [`qf_math.h`](src/qf_math.h): `QF_MATH_VERSION` / `QF_MAT
 - **No heap**, minimal stack depth in normal use, integer-friendly helpers (`QF_*` macros, BAM phase, fixed-radix bridges).
 
 
-## FPU-less alternative: [`fr_math`](https://github.com/deftio/fr_math)
+## API overview
 
-For targets **without a hardware FPU** (or when you want to avoid soft-float cost), use **[fr_math](https://github.com/deftio/fr_math)**—a **battle-tested** sister library that exposes the **same API** using **pure fixed-point** math, with **16-bit** platform support when that is a requirement.
+Public surface is declared in `src/qf_math.h`:
+
+- **Macros**: clamps, interpolation, deg/rad/BAM, radix bridges (`QF_TO_FR`, …).
+- **Trig**: `qf_sin`, `qf_cos`, `qf_tan`, BAM-native variants, inverse trig.
+- **Log/exp/pow**: `qf_log2`, `qf_ln`, `qf_log10`, `qf_pow2`, `qf_exp`, `qf_pow10`, `qf_pow`.
+- **Length**: `qf_sqrt`, `qf_hypot`, `qf_hypot_fast2`, `qf_hypot_fast8` (piecewise-linear magnitude).
+- **Audio-ish**: LFSR noise, PWM/square/saw/triangle waves, `qf_adsr_*` envelope.
+
+Domain violations (`sqrt` of negative, `log` of non-positive) return `QF_DOMAIN_ERROR`.
+
+Full reference: [`docs/API.md`](docs/API.md) — Algorithms: [`docs/ALGORITHMS.md`](docs/ALGORITHMS.md) — [Float math tradeoffs](https://deftio.github.io/qf_math/float-math-tradeoffs.html) (libm vs qf_math vs fixed-point vs DSP)
 
 
 ## Repository layout
@@ -45,14 +126,12 @@ src/           qf_math.c, qf_math.h/.hpp — drop-in C library + C++ wrapper
 test/          qf_math_test.c         — correctness vs libm on host
 docs/          Markdown documentation (algorithms, API, fr_math, integration)
 pages/         GitHub Pages site (compact HTML + CSS; deploy via Actions)
-examples/      optional demos — ESP-IDF (`esp32s3_benchmark`), LilyGO T-Display-S3 PlatformIO (`lilygo_t_display_s3_bench`), Raspberry Pi Pico 2 Arduino (`pico2_benchmark`)
-docker/        multi-arch toolchain image + cross size report (fr_math-style)
+examples/      optional demos — ESP-IDF, LilyGO T-Display-S3, Raspberry Pi Pico 2
+docker/        multi-arch toolchain image + cross size report
 compare/       matrices vs other math libs + benchmark harness (see below)
 tools/         extra shell helpers & qf_math vs libm micro-benchmark
 build/         compiled binaries, CMake outputs, cloned deps (gitignored)
 ```
-
-Everything that resembles an artifact—including vendored comparison libraries—stays under **`build/`** (for example `build/compare/third_party/`) so your tree stays clean.
 
 
 ## Build & test (host)
@@ -77,11 +156,11 @@ make clean
 
 ## Cross-compile code sizes (Docker)
 
-Like **[fr_math](https://github.com/deftio/fr_math)**, this repo ships a **`docker/`** image (Ubuntu + common cross-compilers + Espressif Xtensa) to compile **`src/qf_math.c`** for several CPUs and emit **`.text`** sizes (`build/docker_size_table.md`).
+Like **[fr_math](https://github.com/deftio/fr_math)**, this repo ships a **`docker/`** image (Ubuntu + common 32/64-bit cross-compilers + Espressif Xtensa) to compile **`src/qf_math.c`** for several CPUs and emit the source-of-truth size matrix (`build/docker_sizes.csv`).
 
 ```bash
-make docker-sizes           # same as ./docker/run.sh
-make docker-sizes-rebuild   # force docker image rebuild first
+make docker-sizes           # CSV + compact compare/README.md summary
+make docker-sizes-rebuild   # rebuild image, then CSV + summary
 ```
 
 Details: **[docker/README.md](docker/README.md)**.
@@ -94,19 +173,12 @@ Documentation tables live under **`compare/`** (`LIBRARIES.md` for platforms/rep
 | Target | What it does |
 |--------|----------------|
 | `make compare-deps` | Shallow-clones **[libfixmath](https://github.com/PetteriAimonen/libfixmath)** (MIT) and **[fr_math](https://github.com/deftio/fr_math)** into `build/compare/third_party/`. |
-| `make compare` (alias `make compare-matrix`) | Builds `build/compare/benchmark_suite` — accuracy + wall-clock for **qf_math**, **libm**, **libfixmath** (float bridge), **fr_math** (Q16.16 bridge), and a **Taylor poly** baseline. |
-| `make compare-report` | Prints a Markdown **size table** (`size(1)` totals) for `qf_math.o`, the libfixmath object subset, and `FR_math.o`. |
-| `make compare-github-report` | Regenerates **[`compare/BENCHMARK_REPORT.md`](compare/BENCHMARK_REPORT.md)** for GitHub (embedded bench tables + sizes). |
-| `make compare-tests` | CMake-builds libfixmath `tests_ro64` under `build/compare/third_party/libfixmath-build` and runs it. |
-| `make compare-fr-tests` | Runs **fr_math**’s upstream `make test` against the shallow clone (`compare/run_fr_math_tests.sh`). |
-| `make mcu-benchmark-snapshot` | Flash MCU bench and rewrite **`compare/MCU_BENCHMARK_SNAPSHOT*.md`** via UART (**pio** / Arduino, **pyserial**). Supports LilyGO T-Display-S3, ESP32-S3, and Raspberry Pi Pico 2. |
-| `make benchmark-crossplatform` | Rewrite **`compare/BENCHMARK_CROSSPLATFORM.md`** — Host \| MCU **Speed vs libm** ratios from the committed snapshots (no hardware). |
+| `make compare` | Builds `build/compare/benchmark_suite` — accuracy + wall-clock for **qf_math**, **libm**, **libfixmath** (float bridge), **fr_math** (Q16.16 bridge), and a **Taylor poly** baseline. |
+| `make compare-github-report` | Regenerates **[`compare/BENCHMARK_REPORT.md`](compare/BENCHMARK_REPORT.md)** for GitHub. |
+| `make mcu-benchmark-snapshot` | Flash MCU bench and rewrite **`compare/MCU_BENCHMARK_SNAPSHOT*.md`** via UART. |
+| `make benchmark-crossplatform` | Rewrite **[`compare/BENCHMARK_CROSSPLATFORM.md`](compare/BENCHMARK_CROSSPLATFORM.md)** — Host + MCU ratios from committed snapshots. |
 
-**Interpretation:** Desktop timings are *not* MCU timings. Bridged benchmarks include float↔fixed overhead that disappears when you stay natively in `fix16_t` / fixed-radix `s32`. The automated `s32` peer row is **fr_math**; other fast libraries are surveyed in [`compare/PEERS.md`](compare/PEERS.md) but are not wired into the reproducible host/ESP32-S3 harness yet. Use these numbers for intuition and regression tracking, not as a substitute for profiling on your silicon.
-
-**On silicon:** **[examples/lilygo_t_display_s3_bench](examples/lilygo_t_display_s3_bench/README.md)** (PlatformIO, **LilyGO T-Display-S3**), **[examples/esp32s3_benchmark](examples/esp32s3_benchmark/README.md)** (ESP-IDF), or **[examples/pico2_benchmark](examples/pico2_benchmark/)** (Arduino, **Raspberry Pi Pico 2** ARM / RISC-V) run the **same** [`benchmark_core.c`](compare/benchmark_core.c) loops so UART / USB serial captures wall-clock on real hardware.
-
-**Host vs MCU (relative only):** **[compare/BENCHMARK_CROSSPLATFORM.md](compare/BENCHMARK_CROSSPLATFORM.md)** merges **Speed vs libm** tables from [`compare/BENCHMARK_REPORT.md`](compare/BENCHMARK_REPORT.md) (POSIX snapshot) and the MCU snapshots (`MCU_BENCHMARK_SNAPSHOT*.md` — ESP32-S3, Pico 2 ARM, Pico 2 RISC-V); regenerate with **`make benchmark-crossplatform`** after refreshing those files.
+**On silicon:** **[examples/lilygo_t_display_s3_bench](examples/lilygo_t_display_s3_bench/README.md)** (PlatformIO), **[examples/esp32s3_benchmark](examples/esp32s3_benchmark/README.md)** (ESP-IDF), or **[examples/pico2_benchmark](examples/pico2_benchmark/)** (Arduino, Pico 2 ARM/RISC-V) run the **same** [`benchmark_core.c`](compare/benchmark_core.c) loops on real hardware.
 
 
 ## Packaging & integration
@@ -119,31 +191,16 @@ Use `library.json` at the repo root: add this folder as a local library or publi
 
 `idf_component.yml` registers the component for the ESP-IDF Component Manager. `CMakeLists.txt` wraps `idf_component_register` for `src/qf_math.c` with include path `src/`.
 
-Add as a dependency (path or git URL) per Espressif docs; then `#include "qf_math.h"` from application components.
+Full guide: [`docs/INTEGRATION.md`](docs/INTEGRATION.md)
 
 
-## API overview
-
-Public surface is declared in `src/qf_math.h`:
-
-- **Macros**: clamps, interpolation, deg/rad/BAM, radix bridges (`QF_TO_FR`, …).
-- **Trig**: `qf_sin`, `qf_cos`, `qf_tan`, BAM-native variants, inverse trig.
-- **Log/exp/pow**: `qf_log2`, `qf_ln`, `qf_log10`, `qf_pow2`, `qf_exp`, `qf_pow10`, `qf_pow`.
-- **Length**: `qf_sqrt`, `qf_hypot`, `qf_hypot_fast2`, `qf_hypot_fast8` (piecewise-linear magnitude).
-- **Audio-ish**: LFSR noise, PWM/square/saw/triangle waves, `qf_adsr_*` envelope.
-
-Domain violations (`sqrt` of negative, `log` of non-positive) return `QF_DOMAIN_ERROR`.
-
-
-## Documentation for automation
+## Documentation
 
 | File | Purpose |
 |------|---------|
 | [`docs/`](docs/) | **Markdown documentation** — algorithms, API reference, fr_math relationship, integration guide |
-| [`pages/`](pages/) | **GitHub Pages** site (enable *Settings → Pages → GitHub Actions*; live at `https://deftio.github.io/qf_math/` after first deploy) |
-| [`compare/README.md`](compare/README.md) | Compare harness docs (`make compare`, sizes, upstream suites, GitHub report) |
-| [`compare/BENCHMARK_REPORT.md`](compare/BENCHMARK_REPORT.md) | Last checked-in **host benchmark + size snapshot** (run `make compare-github-report` to refresh) |
-| [`compare/BENCHMARK_CROSSPLATFORM.md`](compare/BENCHMARK_CROSSPLATFORM.md) | Host vs MCU **relative** ratios (`make benchmark-crossplatform`; refresh snapshots first) |
+| [`pages/`](pages/) | **GitHub Pages** site (live at `https://deftio.github.io/qf_math/`) |
+| [`compare/`](compare/) | Compare harness docs, benchmark reports, cross-platform matrices |
 | `llms.txt` | Compact index for LLM tooling / crawling |
 | `agents.md` | Conventions for coding agents working in this repo |
 

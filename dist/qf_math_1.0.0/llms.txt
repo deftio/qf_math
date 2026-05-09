@@ -1,0 +1,39 @@
+# llms.txt — qf_math
+
+> Machine-oriented index for `qf_math`: Quick Float Math (portable C99 float approximations).
+
+## Summary
+
+Single-file style library in `src/qf_math.c` + `src/qf_math.h`. Approximate trig, log/exp, sqrt/hypot, waves, ADSR. BSD-2-Clause. No runtime deps for the library TU.
+
+## Documentation
+
+- `docs/` — Markdown documentation (algorithms, API reference, fr_math relationship, integration)
+- `pages/` — GitHub Pages HTML site (compact bench + overview)
+
+## Entry points
+
+- API / constants: `src/qf_math.h`
+- Implementation: `src/qf_math.c`
+- Host correctness tests (vs libm): `test/qf_math_test.c`
+- Bench vs libm only: `tools/qf_math_bench.c` → `make bench`
+- Multi-library compare + GitHub Markdown report: `compare/` → `make compare`, `make compare-github-report`
+- MCU on-device compare loops (needs `make compare-deps`): `examples/lilygo_t_display_s3_bench/` (PlatformIO, LilyGO T-Display-S3), `examples/esp32s3_benchmark/` (ESP-IDF), or `examples/pico2_benchmark/` (Arduino, Raspberry Pi Pico 2)
+
+## Build
+
+- Primary: `Makefile` at repo root (`make test`, `make lib`, `make bench`, `make compare`, `make compare-report`, `make compare-github-report`, `make compare-tests`, `make docker-sizes`, `make mcu-benchmark-snapshot`).
+- Artifacts directory: `build/` (ignored by git); compare clones live in `build/compare/third_party/`.
+
+## Integration manifests
+
+- PlatformIO: `library.json` (`pio pkg pack .` validates before publish); Arduino-compatible `library.properties`
+- ESP-IDF: `idf_component.yml` (URLs, tags, tarball excludes), `CMakeLists.txt` (component registration, no `-Werror` on consumers)
+
+## Agent notes
+
+See `agents.md` for layout rules and safe edit boundaries.
+
+## Version
+
+`QF_MATH_VERSION` / `QF_MATH_VERSION_HEX` in `qf_math.h`.

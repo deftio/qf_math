@@ -1,48 +1,253 @@
-/* Minimal GitHub Pages styling (lighter than fr_math site) */
+/* ════════════════════════════════════════════════════════════════════
+   qf_math docs — hand-written CSS, no preprocessor, no framework.
+   Zero build step. Edit this file, refresh your browser.
+
+   Color palette: slate + blue. Picked to feel like precision
+   engineering (oscilloscope traces, datasheet blue) and to be
+   distinct from fr_math's stone + amber palette.
+   ════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --qf-bg:         #fafafa;
+  --qf-text:       #18181b;  /* zinc-900 */
+  --qf-muted:      #71717a;  /* zinc-500 */
+  --qf-rule:       #e4e4e7;  /* zinc-200 */
+  --qf-code-bg:    #f4f4f5;  /* zinc-100 */
+  --qf-code-border:#d4d4d8;  /* zinc-300 */
+  --qf-accent:     #2563eb;  /* blue-600 */
+  --qf-accent-dk:  #1d4ed8;  /* blue-700 */
+  --qf-accent-lt:  #bfdbfe;  /* blue-200 */
+  --qf-accent-bg:  #eff6ff;  /* blue-50  */
+}
+
+/* ── Reset ────────────────────────────────────────────────────────── */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-  color: #222;
-  line-height: 1.55;
   margin: 0;
-  padding: 0;
+  font: 400 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI",
+        Roboto, Helvetica, Arial, sans-serif;
+  color: var(--qf-text);
+  background-color: var(--qf-bg);
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
 }
-.page-content {
-  max-width: 52rem;
+
+h1, h2, h3, h4, h5, h6, p, blockquote, pre, ul, ol, dl, figure, table {
+  margin: 0 0 0.8em 0;
+}
+
+ul, ol { padding-left: 1.4em; }
+
+/* ── Page frame ───────────────────────────────────────────────────── */
+
+.wrapper {
+  max-width: 75%;
   margin: 0 auto;
-  padding: 1.5rem 1.25rem 3rem;
+  padding: 0 20px;
 }
-h1 { font-size: 1.75rem; margin-top: 0; }
-h2 { font-size: 1.25rem; margin-top: 1.75rem; border-bottom: 1px solid #eaecef; padding-bottom: 0.25rem; }
-h3 { font-size: 1.1rem; margin-top: 1.5rem; }
-code, .qf-table code {
-  background: #f6f8fa;
-  padding: 0.1em 0.35em;
-  border-radius: 4px;
-  font-size: 0.92em;
+
+@media screen and (max-width: 900px) {
+  .wrapper { max-width: 100%; padding: 0 16px; }
 }
-a { color: #0969da; text-decoration: none; }
-a:hover { text-decoration: underline; }
-.tagline { color: #444; margin-top: 0; }
-.qf-table {
+
+main.page-content {
+  flex: 1;
+  padding: 24px 0 48px 0;
+}
+
+/* ── Header + nav ─────────────────────────────────────────────────── */
+
+.site-header {
+  border-bottom: 2px solid var(--qf-accent-dk);
+  background-color: var(--qf-bg);
+}
+
+.site-header .wrapper {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+.site-title,
+.site-title:visited {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+  color: var(--qf-accent-dk);
+  text-decoration: none;
+}
+
+.site-title:hover { color: var(--qf-accent); }
+
+.site-version {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--qf-muted);
+  margin-left: 6px;
+  letter-spacing: 0;
+}
+
+.site-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.site-nav a {
+  color: var(--qf-text);
+  text-decoration: none;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.site-nav a:hover,
+.site-nav a.active {
+  color: var(--qf-accent);
+  text-decoration: underline;
+}
+
+/* ── Body links ───────────────────────────────────────────────────── */
+
+a { color: var(--qf-accent); }
+a:visited { color: var(--qf-accent-dk); }
+a:hover { color: var(--qf-text); text-decoration: underline; }
+
+/* ── Headings ─────────────────────────────────────────────────────── */
+
+h1 { font-size: 36px; font-weight: 600; letter-spacing: -0.5px;
+     margin-top: 0.3em; margin-bottom: 0.6em; }
+h2 { font-size: 26px; font-weight: 600;
+     margin-top: 1.8em; }
+h3 { font-size: 20px; font-weight: 600; margin-top: 1.4em; }
+h4 { font-size: 17px; font-weight: 600; margin-top: 1.2em; }
+
+@media screen and (max-width: 900px) {
+  h1 { font-size: 30px; }
+  h2 { font-size: 22px; }
+}
+
+/* ── Horizontal rules ─────────────────────────────────────────────── */
+
+hr {
+  margin: 2em 0;
+  border: 0;
+  border-top: 1px solid var(--qf-rule);
+}
+
+/* ── Tables ───────────────────────────────────────────────────────── */
+
+table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.9rem;
-  margin: 1rem 0;
+  border: 1px solid var(--qf-rule);
+  font-size: 15px;
 }
-.qf-table th, .qf-table td {
-  border: 1px solid #d0d7de;
-  padding: 0.45rem 0.55rem;
+
+th, td {
+  padding: 6px 10px;
+  border: 1px solid var(--qf-rule);
   text-align: left;
   vertical-align: top;
 }
-.qf-table thead th { background: #f6f8fa; }
-.qf-table tbody tr:nth-child(even) { background: #fafbfc; }
-.qf-meta, .qf-footnote { color: #444; }
-.card {
-  border: 1px solid #d0d7de;
-  border-radius: 6px;
-  padding: 1rem 1.1rem;
-  margin: 1rem 0;
-  background: #f6f8fa;
+
+th {
+  background-color: var(--qf-code-bg);
+  font-weight: 600;
 }
-footer { margin-top: 2.5rem; color: #666; font-size: 0.9rem; }
+
+tr:nth-child(even) td { background-color: var(--qf-code-bg); }
+
+/* ── Code ─────────────────────────────────────────────────────────── */
+
+code, pre, kbd, samp {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 0.9em;
+}
+
+code {
+  background-color: var(--qf-code-bg);
+  border: 1px solid var(--qf-code-border);
+  border-radius: 3px;
+  padding: 1px 5px;
+  color: var(--qf-accent-dk);
+}
+
+pre {
+  background-color: var(--qf-code-bg);
+  border: 1px solid var(--qf-code-border);
+  border-radius: 4px;
+  padding: 12px 16px;
+  overflow-x: auto;
+}
+
+pre code {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font-size: inherit;
+}
+
+/* ── Blockquotes (callout boxes) ──────────────────────────────────── */
+
+blockquote {
+  margin: 1em 0;
+  padding: 8px 14px;
+  border-left: 4px solid var(--qf-accent-lt);
+  background-color: var(--qf-accent-bg);
+  color: var(--qf-text);
+}
+
+blockquote > :last-child { margin-bottom: 0; }
+
+/* ── Footer ───────────────────────────────────────────────────────── */
+
+.site-footer {
+  border-top: 2px solid var(--qf-rule);
+  color: var(--qf-muted);
+  font-size: 14px;
+  padding: 16px 0;
+}
+
+.site-footer a { color: var(--qf-muted); }
+.site-footer a:hover { color: var(--qf-accent); }
+
+.site-footer .wrapper {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+/* ── Cards (used on the home page) ────────────────────────────────── */
+
+.card {
+  border: 1px solid var(--qf-rule);
+  border-radius: 6px;
+  padding: 1em 1.25em;
+  margin: 1em 0;
+  background-color: var(--qf-code-bg);
+}
+
+.card h2 { margin-top: 0; font-size: 20px; }
+.card p { margin: 0.4em 0 0; }
+.card ul { margin: 0.4em 0 0; padding-left: 1.4em; }
+
+/* ── Utility classes ──────────────────────────────────────────────── */
+
+.muted { color: var(--qf-muted); }
+.center { text-align: center; }
+
+/* ── Bench-table (auto-injected by tools/qf_math_bench.c) ─────────── */
+
+.qf-table { /* alias: bench tool emits class="qf-table", inherit base table styles */ }
+.qf-table code { background: transparent; border: 0; padding: 0; color: inherit; }
+.qf-meta, .qf-footnote { color: var(--qf-muted); font-size: 0.85em; }

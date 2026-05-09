@@ -2,7 +2,6 @@
 
 Complete reference for public symbols declared in [`src/qf_math.h`](../src/qf_math.h).
 
----
 
 ## Type
 
@@ -12,7 +11,6 @@ typedef float qf;
 
 All library functions operate on IEEE-754 single-precision floats. The `qf` typedef makes the intent explicit and allows grepping for the API surface.
 
----
 
 ## Constants
 
@@ -37,7 +35,6 @@ All library functions operate on IEEE-754 single-precision floats. The `qf` type
 | `QF_SQRT5` | 2.23606797 | sqrt(5) |
 | `QF_SQRT10` | 3.16227766 | sqrt(10) |
 
----
 
 ## Conversion macros
 
@@ -84,7 +81,6 @@ BAM is a `uint16_t` where one full revolution = 65536. Natural `uint16_t` wrapar
 | 32768 | 180 | pi |
 | 65536 | wraps to 0 | wraps to 0 |
 
----
 
 ## Utility macros
 
@@ -97,7 +93,6 @@ BAM is a `uint16_t` where one full revolution = 65536. Natural `uint16_t` wrapar
 #define QF_INTERP(a, b, t)    // linear interpolation, t in [0, 1]
 ```
 
----
 
 ## Trigonometric functions
 
@@ -135,7 +130,6 @@ qf qf_tan_deg(qf deg);
 
 Exact poles return `QF_TAN_MAX`. Near-pole values clamp to +/- `QF_TAN_MAX`.
 
----
 
 ## Inverse trigonometric functions
 
@@ -148,7 +142,6 @@ qf qf_atan2(qf y, qf x);  // output [-pi, pi]
 
 Implementation uses cubic Hermite spans for `asin` on `[0, 3/4]`, `atan`-based fallback for `(3/4, 1)`, and six quadratic spans for `atan` on `[0, 1]` with reciprocal reduction for `x > 1`. See [ALGORITHMS.md](ALGORITHMS.md) for details.
 
----
 
 ## Logarithmic functions
 
@@ -160,7 +153,6 @@ qf qf_log10(qf x);   // base-10 logarithm (excluded in lean build)
 
 Returns `QF_DOMAIN_ERROR` for `x <= 0`. `ln` and `log10` are derived from `log2` via constant multiplication.
 
----
 
 ## Exponential functions
 
@@ -173,7 +165,6 @@ qf qf_pow10(qf x);   // 10^x (excluded in lean build)
 
 `exp` and `pow10` are derived from `pow2` via base conversion. `pow` is derived from `pow2(y * log2(x))` and returns `QF_DOMAIN_ERROR` for `x <= 0`.
 
----
 
 ## Square root and magnitude
 
@@ -186,7 +177,6 @@ qf qf_hypot_fast8(qf x, qf y);   // 8-segment piecewise-linear (~0.10% peak erro
 
 `qf_hypot_fast8` uses the same algorithm as `FR_hypot_fast8` (based on US Patent 6,567,777 B1, Chatterjee, expired). No division required.
 
----
 
 ## Wave generators
 
@@ -215,7 +205,6 @@ uint16_t inc = QF_HZ2BAM_INC(440, 48000);
 for (...) { sample = qf_sin_bam(phase); phase += inc; }
 ```
 
----
 
 ## ADSR envelope generator
 
@@ -262,7 +251,6 @@ qf_adsr_release(&env);
 for (...) sample *= qf_adsr_step(&env);
 ```
 
----
 
 ## Domain error sentinel
 
@@ -272,7 +260,6 @@ for (...) sample *= qf_adsr_step(&env);
 
 Returned by `qf_sqrt` (negative input), `qf_log2` / `qf_ln` / `qf_log10` (non-positive input). Not a NaN; compare with `==`.
 
----
 
 ## Lean build mode
 
@@ -280,11 +267,10 @@ Returned by `qf_sqrt` (negative input), `qf_log2` / `qf_ln` / `qf_log10` (non-po
 #define QF_MATH_LEAN
 ```
 
-Define before including `qf_math.h` (or pass `-DQF_MATH_LEAN` to the compiler) to compile a reduced subset that omits `log10`, `pow10`, wave generators, and ADSR. Use for ROM sizing comparisons in the `compare/` harness.
+Define before including `qf_math.h` (or pass `-DQF_MATH_LEAN` to the compiler) to compile the lean float core: radian trig, inverse trig, `log2`/`ln`, `pow2`/`exp`/`pow`, `sqrt`, and `qf_hypot_fast8`. It omits degree/BAM trig entry points, exact `qf_hypot`, `qf_hypot_fast2`, `log10`, `pow10`, wave generators, and ADSR. Use for ROM sizing comparisons in the `compare/` harness.
 
 The compile-time flag `QF_MATH_LEAN_BUILD` is set to `1` when lean mode is active, `0` otherwise.
 
----
 
 ## C++ wrapper (`qf_math.hpp`)
 
@@ -308,11 +294,10 @@ env.trigger();
 for (...) sample *= env.step();
 ```
 
----
 
 ## Version macros
 
 ```c
-#define QF_MATH_VERSION      "1.0.0"
-#define QF_MATH_VERSION_HEX   0x010000
+#define QF_MATH_VERSION      "1.0.1"
+#define QF_MATH_VERSION_HEX   0x010001
 ```

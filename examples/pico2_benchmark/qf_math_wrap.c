@@ -1,1 +1,1 @@
-#include "../../src/qf_math.c"
+#include "qf_math.c"

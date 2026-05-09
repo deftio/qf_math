@@ -38,8 +38,8 @@
 #ifndef __QF_MATH_H__
 #define __QF_MATH_H__
 
-#define QF_MATH_VERSION     "1.0.0"
-#define QF_MATH_VERSION_HEX  0x010000
+#define QF_MATH_VERSION     "1.0.1"
+#define QF_MATH_VERSION_HEX  0x010001
 
 #ifdef __cplusplus
 extern "C" {
@@ -138,10 +138,11 @@ typedef float qf;
 #define QF_DOMAIN_ERROR (-1.0e30f)
 
 /**
- * When defined, compile a **peer-comparable** subset: radian/deg/BAM trig, inverse
- * trig, log2/ln, pow2/exp, pow, sqrt, hypot/hypot_fast2/hypot_fast8 — omit **log10**, **pow10**, wave
- * generators, and ADSR. Use for ROM sizing next to `compare/` harness peers; default
- * builds ship the full API.
+ * When defined, compile a **lean core** subset: radian trig, inverse trig,
+ * log2/ln, pow2/exp, pow, sqrt, and qf_hypot_fast8. It omits degree/BAM trig
+ * entry points, log10, pow10, exact hypot, hypot_fast2, wave generators, and
+ * ADSR. Use for ROM sizing next to `compare/` harness peers; default builds
+ * ship the full API.
  */
 #ifdef QF_MATH_LEAN
 #define QF_MATH_LEAN_BUILD 1
@@ -153,7 +154,7 @@ typedef float qf;
  * Trig — table-based fast approximations
  *
  * Uses full-cycle 512-entry sine and tangent tables with 7-bit BAM
- * sub-step interpolation. Radian and degree APIs convert to BAM units
+ * sub-step interpolation. Radian APIs convert to internal phase units
  * with one float multiply before table lookup.
  *
  * sin/cos: input in radians, output in [-1.0, 1.0]
@@ -166,17 +167,21 @@ typedef float qf;
  * fixed-point pole value while still leaving headroom for cheap arithmetic. */
 #define QF_TAN_MAX  8388608.0f
 
+#if !QF_MATH_LEAN_BUILD
 qf qf_sin_bam(uint16_t bam);
 qf qf_cos_bam(uint16_t bam);
 qf qf_tan_bam(uint16_t bam);
+#endif
 
 qf qf_sin(qf rad);
 qf qf_cos(qf rad);
 qf qf_tan(qf rad);
 
+#if !QF_MATH_LEAN_BUILD
 qf qf_sin_deg(qf deg);
 qf qf_cos_deg(qf deg);
 qf qf_tan_deg(qf deg);
+#endif
 
 /*===============================================
  * Inverse trig
@@ -236,10 +241,13 @@ qf qf_pow10(qf x);
  *           (Chatterjee, expired).
  */
 qf qf_sqrt(qf x);
+#if !QF_MATH_LEAN_BUILD
 qf qf_hypot(qf x, qf y);
 qf qf_hypot_fast2(qf x, qf y);
+#endif
 qf qf_hypot_fast8(qf x, qf y);
 
+#if !QF_MATH_LEAN_BUILD
 /*===============================================
  * Wave generators
  *
@@ -254,7 +262,6 @@ qf qf_hypot_fast8(qf x, qf y);
 #define QF_HZ2BAM_INC(hz, sample_rate) \
     ((uint16_t)(((uint32_t)(hz) * 65536UL) / (uint32_t)(sample_rate)))
 
-#if !QF_MATH_LEAN_BUILD
 qf qf_wave_sqr(uint16_t phase);
 qf qf_wave_pwm(uint16_t phase, uint16_t duty);
 qf qf_wave_tri(uint16_t phase);

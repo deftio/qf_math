@@ -1,6 +1,8 @@
 # Docker cross-build & code-size report
 
-Same pattern as **[fr_math](https://github.com/deftio/fr_math)** (`docker/Dockerfile` + `docker/run.sh`): an **linux/amd64** Ubuntu image preloaded with common cross-compilers plus Espressif’s **xtensa-esp-elf** toolchain, used only to compile **`src/qf_math.c`** to `.o` files and read **`.text`** sizes via `size(1)`.
+Same pattern as **[fr_math](https://github.com/deftio/fr_math)** (`docker/Dockerfile` + `docker/run.sh`): a **linux/amd64** Ubuntu image preloaded with common cross-compilers plus Espressif’s **xtensa-esp-elf** toolchain.
+
+The report compiles **`src/qf_math.c`** in both **lean** and **full** modes for 32/64-bit targets. If `make compare-deps` has fetched `fr_math` into `build/compare/third_party/`, the same run also compiles **`FR_math.c`** in **core** and **full** modes so the table is apples-to-apples across targets and flags.
 
 ## Requirements
 
@@ -11,13 +13,13 @@ Same pattern as **[fr_math](https://github.com/deftio/fr_math)** (`docker/Docker
 From the repository root:
 
 ```bash
-./docker/run.sh
+make docker-sizes
 ```
 
 Force rebuild the image after Dockerfile edits:
 
 ```bash
-./docker/run.sh --rebuild
+make docker-sizes-rebuild
 ```
 
 Or equivalently:
@@ -25,23 +27,23 @@ Or equivalently:
 ```bash
 docker build --platform linux/amd64 -t qf-math-sizes docker/
 docker run --platform linux/amd64 --rm -v "$(pwd):/src" qf-math-sizes bash /src/docker/build_sizes.sh
+python3 tools/update_cross_target_size_docs.py
 ```
 
 ## Outputs
 
 | File | Purpose |
 |------|---------|
-| `build/docker_size_table.md` | Markdown table (stdout is the same table) |
-| `build/docker_sizes.csv` | Machine-readable rows |
+| `build/docker_sizes.csv` | Source-of-truth matrix with text/data/bss/total columns |
 | `build/docker_size_report/` | Intermediate `.o` files |
 
-The script also prints a **Cortex-M0** `-O0` / `-Os` / `-O2` / `-O3` comparison and, if **`make compare-deps`** was run on the host so **`build/compare/third_party/libfixmath/`** exists, a rough **qf_math vs libfixmath** text-size comparison for Cortex-M0.
+The script prints a compact stdout summary and a **Cortex-M0** `-O0` / `-Os` / `-O2` / `-O3` comparison for qf lean/full. `make docker-sizes` then runs `tools/update_cross_target_size_docs.py`, which refreshes the compact section in `compare/README.md` from the CSV.
 
 ## Makefile shortcut
 
 ```bash
-make docker-sizes          # ./docker/run.sh
-make docker-sizes-rebuild   # ./docker/run.sh --rebuild
+make docker-sizes          # CSV + compare/README summary
+make docker-sizes-rebuild  # rebuild image, then CSV + summary
 ```
 
 ## pocketdock (optional)
@@ -57,4 +59,6 @@ c.run("bash /src/docker/build_sizes.sh", mount={"src": "."})
 
 ## Note on floats
 
-`qf_math` is **float32**. Bare-metal objects still rely on **libgcc** soft-float helpers when you link a full image — the numbers here are **library `.text` only**, not total firmware flash.
+`qf_math` is **float32**. Bare-metal objects still rely on **libgcc** soft-float helpers when you link a full image — the numbers here are **object-file sizes only**, not total firmware flash.
+
+The trig tables are part of the object totals. That is intentional: this report is meant to make table footprint visible when comparing `qf_math` against integer-first libraries such as `fr_math`.

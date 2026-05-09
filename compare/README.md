@@ -27,7 +27,7 @@ If your chip cannot tolerate **`float`** in the loop body, prioritize **[fr_math
 | `make compare-fr-tests` | Run **fr_math** upstream `make -f makefile test` (`compare/run_fr_math_tests.sh`; artifacts stay under `build/compare/third_party/fr_math/`). |
 | `make mcu-benchmark-snapshot` | Flash MCU bench and rewrite **`MCU_BENCHMARK_SNAPSHOT*.md`** via UART (**pio** / Arduino, **pyserial**, USB; optional **`MCU_SERIAL_PORT`**). Supports LilyGO T-Display-S3, ESP32-S3, and Raspberry Pi Pico 2 (ARM / RISC-V). |
 | `make benchmark-crossplatform` | Merge **`BENCHMARK_REPORT.md`** + **`MCU_BENCHMARK_SNAPSHOT_ESP32S3.md`** into **`BENCHMARK_CROSSPLATFORM.md`** (relative Host \| ESP32-S3 tables; no hardware). |
-| `make benchmark-arch-speed` | Rewrite **`QF_MATH_ARCH_SPEED.md`**: **`qf_math` speed ratio** (= `libm` time / `qf_math` time) by function; snapshots from **`BENCHMARK_REPORT.md`** plus MCU captures. Host column title from **`BENCHMARK_REPORT.md` § Host metadata**. |
+| `make benchmark-arch-speed` | Rewrite **`QF_MATH_ARCH_SPEED.md`**: **`qf_math` speed ratio** (= `libm` time / `qf_math` time) by function, plus MCU **`fr_math as float`** columns. Host column title comes from **`BENCHMARK_REPORT.md` § Host metadata**. |
 
 ## Footprint rows (what is actually measured)
 

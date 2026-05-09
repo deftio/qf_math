@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 ubuntu:22.04
+FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -12,9 +12,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     lib32gcc-s1 \
     gcc-aarch64-linux-gnu \
     gcc-arm-none-eabi \
-    gcc-msp430 \
-    gcc-avr \
-    gcc-m68hc1x \
     gcc-m68k-linux-gnu \
     gcc-powerpc-linux-gnu \
     gcc-riscv64-linux-gnu \
@@ -22,7 +19,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc-xtensa-lx106 \
     picolibc-xtensa-lx106-elf \
     gcc-mipsel-linux-gnu \
-    sdcc \
     binutils \
     wget ca-certificates xz-utils bzip2 \
     && rm -rf /var/lib/apt/lists/*

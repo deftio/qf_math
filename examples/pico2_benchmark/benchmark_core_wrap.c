@@ -1,1 +1,1 @@
-#include "../../compare/benchmark_core.c"
+#include "benchmark_core.c"

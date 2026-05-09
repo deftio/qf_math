@@ -1,207 +1,210 @@
 #!/usr/bin/env bash
 #
-# Cross-compile src/qf_math.c for common embedded/desktop triples and report
-# `.text` sizes (Berkeley `size`), mirroring the fr_math docker workflow.
+# Cross-compile qf_math and, when compare-deps are present, fr_math for common
+# embedded/desktop triples. This mirrors fr_math's docker size workflow but
+# reports qf full/lean next to fr full/core so table-heavy float builds are
+# visible across real toolchains.
 #
-# Run inside the container (via docker/run.sh):
+# Run inside the container:
 #   bash /src/docker/build_sizes.sh
 #
-# Outputs: build/docker_sizes.csv, build/docker_size_table.md (+ stdout summary)
+# Outputs:
+#   build/docker_sizes.csv
+#   build/docker_size_report/*.o
 
 set -euo pipefail
 
-SRC="/src/src/qf_math.c"
-INC="-I/src/src"
+QF_SRC="/src/src/qf_math.c"
+QF_INC="-I/src/src"
+FR_SRC="/src/build/compare/third_party/fr_math/src/FR_math.c"
+FR_INC="-I/src/build/compare/third_party/fr_math/src"
 OUT="/src/build/docker_size_report"
-TABLE="/src/build/docker_size_table.md"
 CSV="/src/build/docker_sizes.csv"
 
 mkdir -p "${OUT}"
 
-STD_CFLAGS="-std=c99 -Wall -Wextra -Os -ffreestanding"
+STD_CFLAGS="-std=c99 -Wall -Os -ffreestanding"
 
+resolve_size_tool() {
+    local cc="$1"
+    local prefix="${cc%-gcc*}"
+    prefix="${prefix%-gcc-*}"
+    if [[ "${prefix}" != "${cc}" ]] && command -v "${prefix}-size" >/dev/null 2>&1; then
+        echo "${prefix}-size"
+    else
+        echo "size"
+    fi
+}
+
+# compile_one <label> <src> <inc> <compiler> <flags...>
+# Prints "text:data:bss:total" or "n/a"/"fail".
 compile_one() {
     local label="$1"
+    shift
+    local src="$1"
+    shift
+    local inc="$1"
     shift
     local cc="$1"
     shift
     local flags="$*"
-    local obj="${OUT}/qf_math_${label}.o"
+    local obj="${OUT}/${label}.o"
 
     if ! command -v "${cc}" >/dev/null 2>&1; then
         echo "n/a"
         return
     fi
 
-    if ${cc} ${flags} ${INC} ${STD_CFLAGS} -c "${SRC}" -o "${obj}" 2>/dev/null; then
-        local sz_cmd="size"
-        local prefix="${cc%-gcc*}"
-        prefix="${prefix%-gcc-*}"
-        if [[ "${prefix}" != "${cc}" ]] && command -v "${prefix}-size" >/dev/null 2>&1; then
-            sz_cmd="${prefix}-size"
-        fi
-        ${sz_cmd} --format=berkeley "${obj}" 2>/dev/null | tail -1 | awk '{print $1}'
+    if ${cc} ${inc} ${STD_CFLAGS} ${flags} -c "${src}" -o "${obj}" 2>/dev/null; then
+        local sz_cmd
+        sz_cmd="$(resolve_size_tool "${cc}")"
+        ${sz_cmd} --format=berkeley "${obj}" 2>/dev/null | tail -1 | awk '{print $1 ":" $2 ":" $3 ":" $4}'
     else
         echo "fail"
     fi
 }
 
-declare -a TARGET_NAMES TARGET_WIDTHS SIZES
+declare -a TARGET_NAMES TARGET_WIDTHS QF_LEAN QF_FULL FR_CORE FR_FULL
 
 add_row() {
     TARGET_NAMES+=("$1")
     TARGET_WIDTHS+=("$2")
-    SIZES+=("$3")
+    QF_LEAN+=("$3")
+    QF_FULL+=("$4")
+    FR_CORE+=("$5")
+    FR_FULL+=("$6")
 }
 
-echo "Cross-compiling qf_math.c (single TU, ${STD_CFLAGS})..."
+build_target() {
+    local name="$1"
+    local width="$2"
+    local tag="$3"
+    local cc="$4"
+    shift 4
+    local flags="$*"
+
+    local qf_lean qf_full fr_core fr_full
+    qf_lean="$(compile_one "qf_math_${tag}_lean" "${QF_SRC}" "${QF_INC}" "${cc}" -DQF_MATH_LEAN ${flags})"
+    qf_full="$(compile_one "qf_math_${tag}_full" "${QF_SRC}" "${QF_INC}" "${cc}" ${flags})"
+    if [[ -f "${FR_SRC}" ]]; then
+        fr_core="$(compile_one "fr_math_${tag}_core" "${FR_SRC}" "${FR_INC}" "${cc}" -DFR_CORE_ONLY ${flags})"
+        fr_full="$(compile_one "fr_math_${tag}_full" "${FR_SRC}" "${FR_INC}" "${cc}" ${flags})"
+    else
+        fr_core="n/a"
+        fr_full="n/a"
+    fi
+    add_row "${name}" "${width}" "${qf_lean}" "${qf_full}" "${fr_core}" "${fr_full}"
+}
+
+echo "Cross-compiling qf_math.c and fr_math.c (${STD_CFLAGS})..."
+if [[ ! -f "${FR_SRC}" ]]; then
+    echo "fr_math not found at ${FR_SRC}; run 'make compare-deps' on the host for FR columns."
+fi
 echo ""
 
-add_row "RP2040 (Cortex-M0+)" 32 \
-    "$(compile_one rp2040 arm-none-eabi-gcc -mcpu=cortex-m0plus -mthumb)"
+build_target "RP2040 (Cortex-M0+)" 32 rp2040 arm-none-eabi-gcc -mcpu=cortex-m0plus -mthumb
 
-add_row "STM32 (Cortex-M4, soft-float)" 32 \
-    "$(compile_one stm32_cm4 arm-none-eabi-gcc -mcpu=cortex-m4 -mthumb -mfloat-abi=soft)"
+build_target "Pico 2 ARM-M33 (hard-float)" 32 rp2350_m33_hf arm-none-eabi-gcc -mcpu=cortex-m33 -mthumb -mfloat-abi=hard -mfpu=fpv5-sp-d16
 
-add_row "Cortex-M0 (Thumb-1)" 32 \
-    "$(compile_one cm0 arm-none-eabi-gcc -mcpu=cortex-m0 -mthumb)"
+build_target "STM32 (Cortex-M4, soft-float)" 32 stm32_cm4_soft arm-none-eabi-gcc -mcpu=cortex-m4 -mthumb -mfloat-abi=soft
 
-add_row "RISC-V 32 (rv32im)" 32 \
-    "$(compile_one rv32 riscv64-unknown-elf-gcc -march=rv32im -mabi=ilp32)"
+build_target "Cortex-M0 (Thumb-1)" 32 cm0 arm-none-eabi-gcc -mcpu=cortex-m0 -mthumb
 
-esp_text="$(compile_one esp32 xtensa-esp-elf-gcc)"
-if [[ "${esp_text}" == "fail" || "${esp_text}" == "n/a" ]]; then
-    esp_text="$(compile_one esp32_alt xtensa-esp32-elf-gcc)"
-fi
-add_row "ESP32 (Xtensa)" 32 "${esp_text}"
-    "$(compile_one aarch64 aarch64-linux-gnu-gcc)"
+build_target "RISC-V 32 (rv32im)" 32 rv32im riscv64-unknown-elf-gcc -march=rv32im -mabi=ilp32
 
-add_row "MIPS (mipsel linux-gnu)" 32 \
-    "$(compile_one mips mipsel-linux-gnu-gcc)"
+build_target "RISC-V 32 (rv32imafc)" 32 rv32imafc riscv64-unknown-elf-gcc -march=rv32imafc -mabi=ilp32f
 
-add_row "PowerPC (linux-gnu)" 32 \
-    "$(compile_one ppc powerpc-linux-gnu-gcc)"
+build_target "ESP32/S3 (Xtensa esp-elf)" 32 esp32s3_xtensa xtensa-esp-elf-gcc
 
-add_row "68k (linux-gnu)" 32 \
-    "$(compile_one m68k m68k-linux-gnu-gcc)"
+build_target "ESP8266 (Xtensa LX106)" 32 esp8266_xtensa xtensa-lx106-elf-gcc
 
-add_row "MSP430" 16 \
-    "$(compile_one msp430 msp430-elf-gcc -mmcu=msp430f5529)"
+build_target "AArch64 (linux-gnu)" 64 aarch64 aarch64-linux-gnu-gcc
 
-add_row "68HC11" 8 \
-    "$(compile_one hc11 m68hc11-gcc)"
+build_target "MIPS (mipsel linux-gnu)" 32 mipsel mipsel-linux-gnu-gcc
 
-add_row "x86-32" 32 \
-    "$(compile_one x86_32 gcc -m32)"
+build_target "PowerPC (linux-gnu)" 32 ppc powerpc-linux-gnu-gcc
 
-add_row "x86-64" 64 \
-    "$(compile_one x86_64 gcc -m64)"
+build_target "68k (linux-gnu)" 32 m68k m68k-linux-gnu-gcc
+
+build_target "x86-32" 32 x86_32 gcc -m32
+
+build_target "x86-64" 64 x86_64 gcc -m64
 
 # ── CSV ───────────────────────────────────────────────────────────────
 
-echo "target,width_bits,text_bytes" >"${CSV}"
+echo "target,width_bits,qf_lean_text,qf_lean_data,qf_lean_bss,qf_lean_total,qf_full_text,qf_full_data,qf_full_bss,qf_full_total,fr_core_text,fr_core_data,fr_core_bss,fr_core_total,fr_full_text,fr_full_data,fr_full_bss,fr_full_total" >"${CSV}"
+
+csv_parts() {
+    local val="$1"
+    if [[ "${val}" =~ ^[0-9]+:[0-9]+:[0-9]+:[0-9]+$ ]]; then
+        echo "${val//:/,}"
+    else
+        echo "${val},,,"
+    fi
+}
+
+csv_cell() {
+    local val="$1"
+    val="${val//\"/\"\"}"
+    echo "\"${val}\""
+}
+
 for i in "${!TARGET_NAMES[@]}"; do
-    echo "${TARGET_NAMES[$i]},${TARGET_WIDTHS[$i]},${SIZES[$i]}" >>"${CSV}"
+    echo "$(csv_cell "${TARGET_NAMES[$i]}"),${TARGET_WIDTHS[$i]},$(csv_parts "${QF_LEAN[$i]}"),$(csv_parts "${QF_FULL[$i]}"),$(csv_parts "${FR_CORE[$i]}"),$(csv_parts "${FR_FULL[$i]}")" >>"${CSV}"
 done
 echo "Wrote ${CSV}"
 echo ""
 
-fmt_size() {
+total_of() {
     local val="$1"
-    if [[ "${val}" == "n/a" || "${val}" == "fail" ]]; then
+    if [[ "${val}" =~ ^[0-9]+:[0-9]+:[0-9]+:[0-9]+$ ]]; then
+        echo "${val##*:}"
+    else
+        echo "${val}"
+    fi
+}
+
+fmt_size() {
+    local val
+    val="$(total_of "$1")"
+    if [[ "${val}" == "n/a" || "${val}" == "fail" || "${val}" == "compiles" ]]; then
         echo "${val}"
     else
         awk -v v="${val}" 'BEGIN { printf "%.1f KB (%d B)", v/1024.0, v }'
     fi
 }
 
-# ── Markdown table (sort by width then text size) ─────────────────────
+echo "Summary (object totals; full matrix is ${CSV}):"
+echo ""
+echo "| Target | qf lean | qf full | fr core |"
+echo "|--------|--------:|--------:|--------:|"
 
-{
-    echo "## qf_math cross-target code size (\`qf_math.c\` only, \`-Os -ffreestanding\`)"
-    echo ""
-    echo "Generated inside the Docker toolchain image (see \`docker/README.md\`)."
-    echo ""
-    echo "| Target | Word | Text (code) |"
-    echo "|--------|-----:|------------:|"
-
-    declare -a SORT_LINES
+for wanted in \
+    "Pico 2 ARM-M33 (hard-float)" \
+    "RP2040 (Cortex-M0+)" \
+    "ESP32/S3 (Xtensa esp-elf)" \
+    "RISC-V 32 (rv32im)" \
+    "x86-64"; do
     for i in "${!TARGET_NAMES[@]}"; do
-        local_sz="${SIZES[$i]}"
-        if [[ "${local_sz}" =~ ^[0-9]+$ ]]; then
-            sk="${local_sz}"
-        else
-            sk="999999"
+        if [[ "${TARGET_NAMES[$i]}" == "${wanted}" ]]; then
+            echo "| ${TARGET_NAMES[$i]} | $(fmt_size "${QF_LEAN[$i]}") | $(fmt_size "${QF_FULL[$i]}") | $(fmt_size "${FR_CORE[$i]}") |"
         fi
-        SORT_LINES+=("${TARGET_WIDTHS[$i]} ${sk} ${i}")
     done
-
-    sorted=$(printf '%s\n' "${SORT_LINES[@]}" | sort -k1,1n -k2,2n)
-
-    while read -r _w _sz idx; do
-        echo "| ${TARGET_NAMES[$idx]} | ${TARGET_WIDTHS[$idx]} | $(fmt_size "${SIZES[$idx]}") |"
-    done <<<"${sorted}"
-
-    echo ""
-    echo "Sizes are **text** section bytes for \`qf_math.o\` only (no linker step)."
-    echo "Float-heavy code pulls soft-float helpers from libgcc when linking a full firmware image — flash totals will be higher than this object alone."
-} | tee "${TABLE}"
+done
 
 # ── Cortex-M0 optimization sweep ────────────────────────────────────
 
 echo ""
 echo "### Optimization flags (Cortex-M0, arm-none-eabi-gcc)"
 echo ""
-echo "| Flags | Text |"
-echo "|-------|-----:|"
+echo "| Flags | qf lean | qf full |"
+echo "|-------|--------:|--------:|"
 
 for opt in O0 Os O2 O3; do
-    obj="${OUT}/qf_math_cm0_${opt}.o"
-    if arm-none-eabi-gcc -mcpu=cortex-m0 -mthumb ${INC} -std=c99 -Wall -"${opt}" -ffreestanding \
-        -c "${SRC}" -o "${obj}" 2>/dev/null; then
-        text=$(arm-none-eabi-size --format=berkeley "${obj}" 2>/dev/null | tail -1 | awk '{print $1}')
-        kb=$(awk -v t="${text}" 'BEGIN { printf "%.1f", t/1024.0 }')
-        echo "| -${opt} | ${text} B (${kb} KB) |"
-    else
-        echo "| -${opt} | fail |"
-    fi
+    lean="$(compile_one "qf_math_cm0_${opt}_lean" "${QF_SRC}" "${QF_INC}" arm-none-eabi-gcc -DQF_MATH_LEAN -mcpu=cortex-m0 -mthumb -"${opt}")"
+    full="$(compile_one "qf_math_cm0_${opt}_full" "${QF_SRC}" "${QF_INC}" arm-none-eabi-gcc -mcpu=cortex-m0 -mthumb -"${opt}")"
+    echo "| -${opt} | $(fmt_size "${lean}") | $(fmt_size "${full}") |"
 done
 
-# ── Optional: libfixmath subset on Cortex-M0 (after compare-deps on host) ──
-
-LFM_DIR="/src/build/compare/third_party/libfixmath/libfixmath"
-ARM_FLAGS="-mcpu=cortex-m0 -mthumb -std=c99 -Wall -Os -ffreestanding"
-
 echo ""
-echo "### Peer size check (Cortex-M0, \`-Os\`, optional)"
-echo ""
-
-if [[ -d "${LFM_DIR}" ]] && command -v arm-none-eabi-gcc >/dev/null 2>&1; then
-    qf_obj="${OUT}/qf_math_cmp_cm0.o"
-    arm-none-eabi-gcc ${ARM_FLAGS} ${INC} -c "${SRC}" -o "${qf_obj}" 2>/dev/null
-    qf_text=$(arm-none-eabi-size --format=berkeley "${qf_obj}" 2>/dev/null | tail -1 | awk '{print $1}')
-
-    lfm_total=0
-    LFM_SRCS="fix16.c fix16_sqrt.c fix16_exp.c fix16_trig.c uint32.c fract32.c"
-    LFM_INC="-I${LFM_DIR}"
-    for src in ${LFM_SRCS}; do
-        obj="${OUT}/lfm_${src%.c}.o"
-        arm-none-eabi-gcc ${ARM_FLAGS} ${LFM_INC} -c "${LFM_DIR}/${src}" -o "${obj}" 2>/dev/null || true
-        text=$(arm-none-eabi-size --format=berkeley "${obj}" 2>/dev/null | tail -1 | awk '{print $1}')
-        lfm_total=$((lfm_total + text))
-    done
-
-    qf_kb=$(awk -v t="${qf_text}" 'BEGIN { printf "%.1f", t/1024.0 }')
-    lfm_kb=$(awk -v t="${lfm_total}" 'BEGIN { printf "%.1f", t/1024.0 }')
-    echo "| Artifact | Text (sum of listed objects) |"
-    echo "|----------|-----------------------------:|"
-    echo "| qf_math.o | ${qf_text} B (${qf_kb} KB) |"
-    echo "| libfixmath (bench subset .c files) | ${lfm_total} B (${lfm_kb} KB) |"
-    echo ""
-    echo "libfixmath sources are only present after \`make compare-deps\` on the host (\`build/compare/third_party/\`)."
-else
-    echo "(skipped — run \`make compare-deps\` first, or toolchain missing)"
-fi
-
-echo ""
-echo "Markdown table: ${TABLE}"
+echo "CSV: ${CSV}"

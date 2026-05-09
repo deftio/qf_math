@@ -341,6 +341,7 @@ static inline qf qf_tan_bam_phase(uint32_t phase)
  * BAM-native trig
  */
 
+#if !QF_MATH_LEAN_BUILD
 qf qf_sin_bam(uint16_t bam)
 {
     qf out;
@@ -359,6 +360,7 @@ qf qf_tan_bam(uint16_t bam)
 {
     return qf_tan_bam_phase((uint32_t)bam << QF_BAM_UNIT_FRAC_BITS);
 }
+#endif
 
 /*=======================================================
  * Radian-input trig
@@ -391,6 +393,7 @@ qf qf_tan(qf rad)
  * Degree-input trig
  */
 
+#if !QF_MATH_LEAN_BUILD
 qf qf_sin_deg(qf deg)
 {
     qf out;
@@ -413,6 +416,7 @@ qf qf_tan_deg(qf deg)
     uint32_t phase = (uint32_t)((int32_t)(deg * QF_BAM_PER_DEG * QF_BAM_UNIT_SCALE)) & QF_BAM_PHASE_MASK;
     return qf_tan_bam_phase(phase);
 }
+#endif
 
 /*=======================================================
  * Inverse trig
@@ -767,10 +771,12 @@ qf qf_sqrt(qf x)
  * Hypot
  */
 
+#if !QF_MATH_LEAN_BUILD
 qf qf_hypot(qf x, qf y)
 {
     return qf_sqrt(x * x + y * y);
 }
+#endif
 
 /*=======================================================
  * FR_hypot_fast8 — 8-segment piecewise-linear magnitude approximation.
@@ -798,6 +804,7 @@ qf qf_hypot(qf x, qf y)
  *   Segment [0, 0.125]:       a = 1 - 1/1024                    = 0.99902344
  *                              b = 1/16 - 1/2048                 = 0.06201172
  */
+#if !QF_MATH_LEAN_BUILD
 qf qf_hypot_fast2(qf x, qf y)
 {
     qf hi, lo;
@@ -814,6 +821,7 @@ qf qf_hypot_fast2(qf x, qf y)
         return hi * 0.81376422f + lo * 0.59235915f;
     return hi * 0.98586827f + lo * 0.23606798f;
 }
+#endif
 
 qf qf_hypot_fast8(qf x, qf y)
 {

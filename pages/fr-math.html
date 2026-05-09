@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Choosing between Quick Float and Fixed-Point Math</title>
+  <meta name="description" content="qf_math and fr_math: same API, same function coverage — one operates on IEEE-754 float, the other on fixed-point integers. Pick the one that matches the target hardware.">
+  <link rel="stylesheet" href="assets/main.css">
+</head>
+<body>
+
+<header id="site-header"></header>
+
+<main class="page-content">
+  <div class="wrapper">
+
+<h1>Choosing between Quick Float and Fixed-Point Math</h1>
+<p class="tagline">Same API, same function coverage &mdash; <code>float</code> or fixed-point integer, depending on the target.</p>
+
+<p><strong><a href="https://github.com/deftio/qf_math">qf_math</a></strong> operates on IEEE-754 <code>float</code>. <strong><a href="https://github.com/deftio/fr_math">fr_math</a></strong> operates on fixed-point integers with a <strong>caller-selectable radix</strong> &mdash; the radix parameter controls how many of the 32 bits are fractional (e.g. radix 16 = s15.16, radix 12 = s19.12, radix 8 = s23.8). Both libraries expose the same set of functions &mdash; trig, inverse trig, log, exp, sqrt, hypot, waveform generators, ADSR envelopes &mdash; so switching from one to the other is largely a matter of changing the include and the numeric type. The API names follow a parallel convention: <code>qf_sin()</code> / <code>fr_sin()</code>, <code>qf_log2()</code> / <code>FR_log2()</code>, and so on.</p>
+
+
+<h2>Choosing between them</h2>
+
+<table class="qf-table">
+<thead><tr><th>Factor</th><th>qf_math (float)</th><th>fr_math (fixed-point)</th></tr></thead>
+<tbody>
+<tr><td><strong>Best targets</strong></td><td>Cortex-M4F/M7, ESP32, RP2040/RP2350 with FPU, any core with hardware single-precision</td><td>Cortex-M0/M0+, 8/16-bit MCUs, RISC-V without F extension, any core without FPU</td></tr>
+<tr><td><strong>Soft-float cost</strong></td><td>High &mdash; compiler inserts software multiply/add when no FPU is present</td><td>Zero &mdash; pure integer ALU throughout</td></tr>
+<tr><td><strong>Dynamic range</strong></td><td>~1e-38 to ~3.4e+38</td><td>Determined by radix choice (e.g. R=16: &plusmn;32K; R=12: &plusmn;512K; R=8: &plusmn;8M)</td></tr>
+<tr><td><strong>Precision</strong></td><td>~7 significant digits (float32)</td><td>Determined by radix choice (e.g. R=16: ~1.5e-5 resolution; R=12: ~2.4e-4)</td></tr>
+<tr><td><strong>Typical accuracy</strong></td><td>&lt; 0.002% FS (trig), &lt; 0.001% rel (log/exp)</td><td>&lt; 0.008% FS (trig), &lt; 0.4% rel (log/exp)</td></tr>
+<tr><td><strong>Table ROM</strong></td><td>~4.4 KB (512-entry float tables)</td><td>~908 bytes (quadrant/octant <code>unsigned short</code> tables)</td></tr>
+<tr><td><strong>16-bit support</strong></td><td>Requires 32-bit float</td><td>Supports 16-bit platforms (s16 mode)</td></tr>
+<tr><td><strong>Language</strong></td><td>C99</td><td>C89 (pre-C99 fallback typedefs for compilers without <code>&lt;stdint.h&gt;</code>)</td></tr>
+</tbody>
+</table>
+
+<p>In short: if the target has a hardware FPU or the pipeline already works in <code>float</code>, use qf_math. If the target has no FPU or soft-float overhead is unacceptable, use fr_math and pick the radix that fits the application&rsquo;s range/resolution needs. Both produce the same outputs for the same mathematical inputs &mdash; the accuracy and speed trade-offs differ with the numeric representation.</p>
+
+
+<h2>What they share</h2>
+
+<p>Both libraries use BAM (Binary Angular Measure) phase, lookup-based approximation with sub-step linear interpolation, the same 8-segment piecewise-linear fast hypot, and identical waveform/ADSR API shapes.</p>
+
+<table class="qf-table">
+<thead><tr><th>Feature</th><th>qf_math</th><th>fr_math</th></tr></thead>
+<tbody>
+<tr><td>BAM phase</td><td><code>uint16_t</code>, 65536 = full turn</td><td><code>uint16_t</code>, 65536 = full turn</td></tr>
+<tr><td>Log2 / Pow2 tables</td><td>65-entry, <code>float</code></td><td>65-entry, <code>u32</code> (s.16 fixed-point)</td></tr>
+<tr><td>hypot_fast8</td><td>8-segment piecewise-linear (float multiply)</td><td>8-segment piecewise-linear (shift-only, no multiply)</td></tr>
+<tr><td>Waveforms</td><td>sqr/pwm/tri/saw/noise via BAM phase</td><td>sqr/pwm/tri/saw/noise via BAM phase</td></tr>
+<tr><td>ADSR</td><td><code>qf_adsr_t</code> (float levels)</td><td><code>fr_adsr_t</code> (fixed-point levels)</td></tr>
+</tbody>
+</table>
+
+
+<h2>Where the internals differ</h2>
+
+<p>The table layouts and numerical methods are tuned to each domain:</p>
+
+<table class="qf-table">
+<thead><tr><th>Algorithm</th><th>qf_math</th><th>fr_math</th></tr></thead>
+<tbody>
+<tr><td><strong>Sine table</strong></td><td>512-entry <strong>full-cycle</strong>, <code>float</code> (2048 bytes)</td><td>129-entry <strong>first-quadrant</strong>, <code>unsigned short</code> u0.15 (258 bytes); other quadrants via symmetry</td></tr>
+<tr><td><strong>Tangent table</strong></td><td>512-entry <strong>full-cycle</strong>, <code>float</code> (2048 bytes)</td><td>65-entry <strong>first-octant</strong>, <code>unsigned short</code> u0.15 (130 bytes); second octant via <code>tan(x) = 1/tan(&pi;/2 &minus; x)</code></td></tr>
+<tr><td><strong>Interpolation</strong></td><td>7-bit sub-step linear interpolation</td><td>7-bit sub-step linear interpolation + small-angle approximations near cardinals (&lt; 0.7&deg;)</td></tr>
+<tr><td><strong>Inverse trig</strong></td><td>Piecewise Hermite polynomial spans; atan2 via reciprocal reduction</td><td>Binary search on ascending sine quadrant table; near-1.0 fast path <code>acos(x) &asymp; &radic;(2(1&minus;x))</code>; atan2 via hypot_fast8 + conditional asin/acos</td></tr>
+<tr><td><strong>Sqrt</strong></td><td>Newton-Raphson on <code>1/&radic;x</code>, seeded by IEEE 754 magic constant</td><td>Non-restoring shift-and-subtract digit-by-digit (no multiply, no divide)</td></tr>
+<tr><td><strong>Reciprocal</strong></td><td>IEEE 754 magic constant + Newton-Raphson</td><td>Shift-based initial estimate + Newton-Raphson</td></tr>
+<tr><td><strong>Exact hypot</strong></td><td><code>qf_sqrt(x*x + y*y)</code></td><td><code>fr_isqrt64(x*x + y*y)</code> (64-bit integer product + digit-by-digit sqrt)</td></tr>
+<tr><td><strong>Small-angle paths</strong></td><td>None (table covers full range uniformly)</td><td><code>sin(&theta;) &asymp; &theta;</code>, <code>tan(&delta;) &asymp; &delta;</code> near zero-crossings; <code>cot(&delta;) &asymp; 1/&delta;</code> near poles; atan2 uses <code>asin(x) &asymp; x</code> below ~4.8&deg;</td></tr>
+</tbody>
+</table>
+
+<p>qf_math uses larger <code>float</code> tables (4 bytes/entry) for uniform full-cycle indexing. fr_math packs quadrant/octant tables into <code>unsigned short</code> (2 bytes/entry) and recovers the full circle via symmetry, keeping total table ROM under 1 KB.</p>
+
+
+<h2>Switching between them</h2>
+
+<p>Because the API names are parallel, porting between the two is straightforward. The main change is the numeric type and the include:</p>
+
+<pre><code class="language-c">/* qf_math — float pipeline */
+#include "qf_math.h"
+qf y   = qf_sin(angle);
+qf len = qf_hypot(dx, dy);
+qf dB  = 20.0f * qf_log10(v / ref);
+
+/* fr_math — fixed-point pipeline (radix 16 = s15.16) */
+#define R 16
+#include "FR_math.h"
+s32 y   = fr_sin(angle, R);
+s32 len = FR_hypot(dx, dy, R);
+s32 dB  = FR_MUL(I2FR(20, R), FR_log10(FR_DIV(v, ref, R), R, R), R);</code></pre>
+
+<p>fr_math calls carry an explicit radix parameter &mdash; change <code>R</code> to trade range for resolution. qf_math functions take and return plain <code>float</code>.</p>
+
+<h3>Bridging macros</h3>
+
+<p>qf_math.h includes macros for converting between <code>float</code> and fixed-radix integers at system boundaries:</p>
+
+<pre><code class="language-c">int32_t fr_val = QF_TO_FR(1.234f, 16);     // float → Q16.16 (truncating)
+int32_t fr_val = QF_TO_FR_RND(1.234f, 16);  // float → Q16.16 (rounding)
+qf float_val   = FR_TO_QF(80871, 16);       // Q16.16 → float</code></pre>
+
+<p>The C++ wrapper provides the same conversions:</p>
+
+<pre><code class="language-cpp">int32_t fr = qf_math::to_fr(1.234f, 16);
+qf back    = qf_math::from_fr(fr, 16);</code></pre>
+
+
+<h2>Speed comparison</h2>
+
+<p>The <code>compare/</code> harness benchmarks both libraries (and others) against libm on the same hardware. Ratios below are <strong>libm time &divide; library time</strong> &mdash; values above 1.0 mean the library is faster than libm.</p>
+
+<table class="qf-table">
+<thead><tr><th>Function</th><th>qf_math</th><th>fr_math</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td>sin (rad)</td><td><strong>4.30</strong>&times;</td><td>1.32&times;</td><td></td></tr>
+<tr><td>cos (rad)</td><td><strong>4.39</strong>&times;</td><td>0.90&times;</td><td></td></tr>
+<tr><td>tan (rad)</td><td><strong>3.56</strong>&times;</td><td>1.31&times;</td><td></td></tr>
+<tr><td>asin</td><td>1.10&times;</td><td>0.77&times;</td><td></td></tr>
+<tr><td>acos</td><td>1.11&times;</td><td>0.77&times;</td><td></td></tr>
+<tr><td>atan2</td><td><strong>1.41</strong>&times;</td><td>0.70&times;</td><td></td></tr>
+<tr><td>sqrt</td><td>1.07&times;</td><td>0.08&times;</td><td>libm sqrtf often maps to a hardware instruction</td></tr>
+<tr><td>exp</td><td><strong>2.63</strong>&times;</td><td>1.88&times;</td><td></td></tr>
+<tr><td>ln</td><td><strong>2.20</strong>&times;</td><td>0.92&times;</td><td></td></tr>
+<tr><td>hypot</td><td><strong>2.51</strong>&times;</td><td>0.21&times;</td><td>fr_math hypot goes through float bridge overhead</td></tr>
+</tbody>
+</table>
+
+<p class="qf-footnote"><small>ESP32-S3 (with FPU). fr_math numbers include <strong>float&harr;fixed bridge overhead</strong> &mdash; native <code>s32</code> / <code>fix16_t</code> calls in a pure-integer pipeline are faster. See <a href="https://github.com/deftio/qf_math/blob/main/compare/BENCHMARK_CROSSPLATFORM.md">compare/BENCHMARK_CROSSPLATFORM.md</a> for full matrices including multiple architectures, libfixmath, FastTrig, and ESP-DSP.</small></p>
+
+  </div>
+</main>
+
+<footer id="site-footer"></footer>
+
+<script src="assets/site.js"></script>
+</body>
+</html>

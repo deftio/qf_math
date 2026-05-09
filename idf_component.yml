@@ -1,4 +1,4 @@
-version: "1.0.0"
+version: "1.0.1"
 description: >-
   Quick Float Math — approximate float32 routines (trig, log/exp, sqrt/hypot,
   waveform helpers, ADSR) for Espressif ESP-IDF. One C99 TU, no heap.

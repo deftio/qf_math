@@ -2,7 +2,6 @@
 
 How the numerical routines work under the hood.
 
----
 
 ## Table-driven trigonometry
 
@@ -36,7 +35,6 @@ This avoids table entries near singularities where linear interpolation would pr
 Sin/cos: ~0.01% of amplitude (vs double reference).
 Tangent: ~1.7% of amplitude, excluding near-pole regions.
 
----
 
 ## BAM (Binary Angular Measure) phase system
 
@@ -50,7 +48,6 @@ Conversion constants:
 - `QF_BAM_PER_RAD` = 65536 / (2*pi) = 10430.378
 - `QF_BAM_PER_DEG` = 65536 / 360 = 182.044
 
----
 
 ## Inverse trigonometry
 
@@ -79,7 +76,6 @@ The shared kernel `qf_asin_pos_kernel(ax)` computes `asin(|x|)` for `x` in `[0, 
 2. If `|y| > |x|`: `q1_angle = pi/2 - atan(|x|/|y|)`.
 3. Map to correct quadrant based on signs of `x` and `y`.
 
----
 
 ## Logarithms
 
@@ -98,7 +94,6 @@ Derived from `log2` by constant multiplication:
 - `ln(x) = log2(x) * ln(2)`
 - `log10(x) = log2(x) * log10(2)`
 
----
 
 ## Exponentials
 
@@ -114,7 +109,6 @@ Derived from `pow2` by base conversion:
 - `exp(x) = pow2(x * log2(e))`
 - `pow10(x) = pow2(x * log2(10))`
 
----
 
 ## Square root
 
@@ -135,7 +129,6 @@ Newton-Raphson iterations on the inverse square root:
 
 Worst-case relative error: ~0.0005%.
 
----
 
 ## Reciprocal
 
@@ -148,7 +141,6 @@ y = y * (2 - x * y);       // Newton-Raphson refinement
 
 Three iterations for general use (`qf_inv_pos`), two iterations where reduced precision is acceptable (`qf_inv_pos_atan`).
 
----
 
 ## Hypot variants
 
@@ -185,7 +177,6 @@ Result: `a * hi + b * lo`. All coefficients are derived from shift-only expressi
 
 Peak error: ~0.10%.
 
----
 
 ## Error budgets and worst-case accuracy
 

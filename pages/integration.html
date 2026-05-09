@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>qf_math Integration Guide</title>
+  <meta name="description" content="How to add qf_math to your project: plain C, CMake, PlatformIO, ESP-IDF, Arduino, C++ wrapper.">
+  <link rel="stylesheet" href="assets/main.css">
+</head>
+<body>
+
+<header id="site-header"></header>
+
+<main class="page-content">
+  <div class="wrapper">
+
+<h1>Integration Guide</h1>
+<p class="tagline">How to add qf_math to a project.</p>
+
+
+<h2>Plain C (manual)</h2>
+
+<p>Copy <code>src/qf_math.c</code> and <code>src/qf_math.h</code> into the project. Compile <code>qf_math.c</code> as a single translation unit alongside the application code.</p>
+
+<pre><code>gcc -std=c99 -Os -c qf_math.c -o qf_math.o
+gcc -std=c99 -Os main.c qf_math.o -o main</code></pre>
+
+<p>No external dependencies are required for the library itself. The <code>-lm</code> flag is only needed for tests and benchmarks (which use <code>sinf</code>, <code>logf</code>, etc. as reference implementations).</p>
+
+<pre><code>#include "qf_math.h"
+
+qf y = qf_sin(1.0f);
+qf len = qf_hypot(dx, dy);</code></pre>
+
+
+<h2>CMake</h2>
+
+<p>The root <code>CMakeLists.txt</code> is configured for ESP-IDF component registration. For standalone CMake projects, add qf_math as a subdirectory or create a simple target:</p>
+
+<pre><code>add_library(qf_math STATIC src/qf_math.c)
+target_include_directories(qf_math PUBLIC src/)</code></pre>
+
+<p>Then link against it:</p>
+
+<pre><code>target_link_libraries(your_app PRIVATE qf_math)</code></pre>
+
+<h3>Lean build</h3>
+
+<p>To compile the reduced-footprint subset (no log10, pow10, waves, ADSR):</p>
+
+<pre><code>target_compile_definitions(qf_math PRIVATE QF_MATH_LEAN)</code></pre>
+
+
+<h2>PlatformIO</h2>
+
+<p>The repo includes a <code>library.json</code> at the root. Add qf_math as a library dependency in <code>platformio.ini</code>:</p>
+
+<pre><code>[env:your_board]
+lib_deps =
+    deftio/qf_math</code></pre>
+
+<p>Or reference the git repo directly:</p>
+
+<pre><code>lib_deps =
+    https://github.com/deftio/qf_math.git</code></pre>
+
+<p>Headers resolve from <code>src/</code>:</p>
+
+<pre><code>#include "qf_math.h"    // C API
+#include "qf_math.hpp"   // C++ wrapper (optional)</code></pre>
+
+<p>Lean subset (omit <code>log10</code>, <code>pow10</code>, waves, ADSR):</p>
+
+<pre><code>build_flags =
+    -DQF_MATH_LEAN</code></pre>
+
+<p>Arduino IDE installs also see <code>library.properties</code> (<code>src/</code> layout).</p>
+
+
+<h2>ESP-IDF component</h2>
+
+<p>The repo includes <code>idf_component.yml</code> for the ESP-IDF Component Manager.</p>
+
+<h3>Via component manager</h3>
+
+<p>Add to the project&rsquo;s <code>idf_component.yml</code>:</p>
+
+<pre><code>dependencies:
+  deftio/qf_math:
+    version: "&gt;=1.0.1"</code></pre>
+
+<h3>Via git submodule or local path</h3>
+
+<p>Add the qf_math repo as a component in the project&rsquo;s <code>components/</code> directory:</p>
+
+<pre><code>components/
+  qf_math/
+    src/
+      qf_math.c
+      qf_math.h
+    CMakeLists.txt
+    idf_component.yml</code></pre>
+
+<p>The root <code>CMakeLists.txt</code> registers <code>src/qf_math.c</code> with include path <code>src/</code>. Compile flags use <code>-Wall</code>/<code>-Wextra</code>/<code>-Wshadow</code>/<code>-Wconversion</code> <strong>without</strong> <code>-Werror</code>, so downstream apps are less likely to break on toolchain or IDF churn.</p>
+
+<p>Then include from any application component:</p>
+
+<pre><code>#include "qf_math.h"</code></pre>
+
+
+<h2>Arduino (from source)</h2>
+
+<p>Copy <code>src/qf_math.c</code>, <code>src/qf_math.h</code>, and optionally <code>src/qf_math.hpp</code> into the Arduino sketch folder or a local library directory.</p>
+
+<p>For Arduino IDE, the <code>.c</code> file will be compiled automatically:</p>
+
+<pre><code>#include "qf_math.h"
+
+void setup() {
+    float y = qf_sin(1.0f);
+}</code></pre>
+
+<p>For the C++ wrapper:</p>
+
+<pre><code>#include "qf_math.hpp"
+
+void setup() {
+    auto y = qf_math::sin(1.0f);
+}</code></pre>
+
+
+<h2>C++ usage via qf_math.hpp</h2>
+
+<p>The header-only C++ wrapper lives at <code>src/qf_math.hpp</code>. It includes <code>qf_math.h</code> automatically and wraps the C API in <code>namespace qf_math</code>.</p>
+
+<pre><code>#include "qf_math.hpp"
+
+// Free functions
+auto y = qf_math::sin(1.0f);
+auto len = qf_math::hypot(3.0f, 4.0f);
+auto db = qf_math::log2(amplitude);
+
+// ADSR envelope (class wrapper)
+qf_math::adsr env(1000, 500, 0.7f, 2000);
+env.trigger();
+for (int i = 0; i &lt; n; i++) {
+    sample[i] *= env.step();
+}
+env.release();</code></pre>
+
+<p>The wrapper adds no storage, allocation, exceptions, RTTI, or runtime dependencies beyond the C library.</p>
+
+
+<h2>Compiler flags</h2>
+
+<p>Recommended flags for the library:</p>
+
+<pre><code>-std=c99 -Os -Wall -Wextra -Wpedantic</code></pre>
+
+<p>For C++:</p>
+
+<pre><code>-std=c++11 -Os -Wall -Wextra -Wpedantic</code></pre>
+
+<h3>Optional defines</h3>
+
+<table class="qf-table">
+<thead><tr><th>Define</th><th>Effect</th></tr></thead>
+<tbody>
+<tr><td><code>QF_MATH_LEAN</code></td><td>Build the lean float core: radian trig, inverse trig, log/exp/pow core, sqrt, and <code>hypot_fast8</code>; excludes degree/BAM trig entry points, exact <code>hypot</code>, <code>hypot_fast2</code>, log10, pow10, wave generators, and ADSR.</td></tr>
+<tr><td><code>QF_MATH_COVERAGE</code></td><td>Expose internal test helpers (used by <code>make coverage</code>)</td></tr>
+</tbody>
+</table>
+
+  </div>
+</main>
+
+<footer id="site-footer"></footer>
+
+<script src="assets/site.js"></script>
+</body>
+</html>

@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>qf_math Quick Start</title>
+  <meta name="description" content="Quick start guide for qf_math: include, compile, and use fast approximate trig, log, exp, sqrt, hypot, waveforms, and ADSR on any IEEE-754 target.">
+  <link rel="stylesheet" href="assets/main.css">
+</head>
+<body>
+
+<header id="site-header"></header>
+
+<main class="page-content">
+  <div class="wrapper">
+
+<h1>Quick Start</h1>
+
+<h2>Include and compile</h2>
+
+<p>Copy <code>src/qf_math.c</code> and <code>src/qf_math.h</code> into the project. Compile <code>qf_math.c</code> as a single translation unit alongside application code. No external dependencies &mdash; no <code>-lm</code> required.</p>
+
+<pre><code>gcc -std=c99 -Os main.c qf_math.c -o main</code></pre>
+
+<pre><code class="language-c">#include "qf_math.h"</code></pre>
+
+<p>All functions take and return <code>qf</code> (a <code>typedef</code> for <code>float</code>).</p>
+
+
+<h2>Trigonometry</h2>
+
+<p>Three input conventions: <strong>radians</strong>, <strong>degrees</strong>, and <strong>BAM</strong> (Binary Angular Measure, where <code>uint16_t</code> 65536 = one full revolution).</p>
+
+<pre><code class="language-c">/* Radians */
+qf y = qf_sin(1.0f);           /* 0.8415 */
+qf x = qf_cos(1.0f);           /* 0.5403 */
+qf t = qf_tan(0.5f);           /* 0.5463 */
+
+/* Degrees */
+qf s45 = qf_sin_deg(45.0f);    /* 0.7071 */
+qf c60 = qf_cos_deg(60.0f);    /* 0.5000 */
+
+/* BAM (16384 = 90 deg) */
+qf s90 = qf_sin_bam(16384);    /* 1.0000 (exact) */</code></pre>
+
+<h3>Inverse trig</h3>
+
+<pre><code class="language-c">qf angle = qf_asin(0.5f);        /* 0.5236 rad (30 deg) */
+qf angle = qf_acos(0.5f);        /* 1.0472 rad (60 deg) */
+qf angle = qf_atan2(3.0f, 4.0f); /* 0.6435 rad */</code></pre>
+
+
+<h2>Log, exp, pow</h2>
+
+<pre><code class="language-c">qf l2  = qf_log2(8.0f);        /* 3.0 */
+qf l   = qf_ln(2.71828f);      /* 1.0 */
+qf l10 = qf_log10(1000.0f);    /* 3.0 */
+
+qf p2  = qf_pow2(3.0f);        /* 8.0 */
+qf e1  = qf_exp(1.0f);         /* 2.7183 */
+qf p   = qf_pow(2.0f, 10.0f);  /* 1024.0 */</code></pre>
+
+
+<h2>Sqrt and hypot</h2>
+
+<pre><code class="language-c">qf r  = qf_sqrt(2.0f);              /* 1.4142 */
+qf h  = qf_hypot(3.0f, 4.0f);       /* 5.0000 */
+qf hf = qf_hypot_fast8(3.0f, 4.0f); /* 5.0015 (0.1% worst-case error, faster) */</code></pre>
+
+
+<h2>Utility macros</h2>
+
+<pre><code class="language-c">qf rad  = QF_DEG_TO_RAD(180.0f);             /* 3.1416 */
+qf deg  = QF_RAD_TO_DEG(QF_PI);              /* 180.0 */
+qf c    = QF_CLAMP(5.0f, 0.0f, 3.0f);        /* 3.0 */
+qf mid  = QF_INTERP(0.0f, 10.0f, 0.25f);     /* 2.5 */</code></pre>
+
+
+<h2>Waveform generators</h2>
+
+<p>All waveforms use <code>uint16_t</code> BAM phase (0&ndash;65535 = one cycle) and return values in [&minus;1, +1].</p>
+
+<pre><code class="language-c">qf sq = qf_wave_sqr(8192);            /* +1.0 (first half) */
+qf tr = qf_wave_tri(16384);           /* +1.0 (peak) */
+qf sw = qf_wave_saw(32768);           /*  0.0 (midpoint) */
+
+uint32_t noise_state = 12345;
+qf n  = qf_wave_noise(&amp;noise_state);  /* pseudo-random in [-1, 1] */</code></pre>
+
+<p>Phase increment for a given frequency:</p>
+
+<pre><code class="language-c">uint16_t inc = QF_HZ2BAM_INC(440, 48000);  /* 440 Hz at 48 kHz sample rate */</code></pre>
+
+
+<h2>ADSR envelope</h2>
+
+<pre><code class="language-c">qf_adsr_t env;
+qf_adsr_init(&amp;env, 1000, 500, 0.7f, 2000);  /* attack, decay, sustain, release (samples) */
+qf_adsr_trigger(&amp;env);
+
+for (int i = 0; i &lt; num_samples; i++) {
+    sample[i] *= qf_adsr_step(&amp;env);
+}
+
+qf_adsr_release(&amp;env);  /* begin release phase */</code></pre>
+
+
+<h2>Fixed-radix bridge (qf_math &harr; fr_math)</h2>
+
+<p>Convert between <code>float</code> and fixed-radix integers at system boundaries:</p>
+
+<pre><code class="language-c">int32_t fr = QF_TO_FR(1.234f, 16);      /* float &rarr; Q16.16 (truncating) */
+int32_t fr = QF_TO_FR_RND(1.234f, 16);  /* float &rarr; Q16.16 (rounding) */
+qf back    = FR_TO_QF(80871, 16);        /* Q16.16 &rarr; float */</code></pre>
+
+
+<h2>Domain errors</h2>
+
+<p>Functions with restricted domains (<code>qf_sqrt</code> of negative, <code>qf_log2</code> of non-positive) return <code>QF_DOMAIN_ERROR</code> (&minus;1e30f).</p>
+
+<pre><code class="language-c">qf bad = qf_sqrt(-1.0f);
+if (bad == QF_DOMAIN_ERROR) { /* handle error */ }</code></pre>
+
+
+<h2>Runnable example</h2>
+
+<p>A complete working program is in <a href="https://github.com/deftio/qf_math/tree/main/examples/quickstart"><code>examples/quickstart/</code></a>. Build with <code>make</code> and run <code>./quickstart</code>.</p>
+
+  </div>
+</main>
+
+<footer id="site-footer"></footer>
+
+<script src="assets/site.js"></script>
+</body>
+</html>

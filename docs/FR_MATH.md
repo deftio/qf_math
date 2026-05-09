@@ -1,96 +1,109 @@
-# Relationship to fr_math
+# Choosing between Quick Float and Fixed-Point Math
 
-**[qf_math](https://github.com/deftio/qf_math)** and **[fr_math](https://github.com/deftio/fr_math)** are sister libraries by the same author. They share algorithmic heritage but target different numeric domains.
+**[qf_math](https://github.com/deftio/qf_math)** operates on IEEE-754 `float`. **[fr_math](https://github.com/deftio/fr_math)** operates on fixed-point integers with a **caller-selectable radix** — the radix parameter controls how many of the 32 bits are fractional (e.g. radix 16 = s15.16, radix 12 = s19.12, radix 8 = s23.8). Both libraries expose the same set of functions — trig, inverse trig, log, exp, sqrt, hypot, waveform generators, ADSR envelopes — so switching from one to the other is largely a matter of changing the include and the numeric type. The API names follow a parallel convention: `qf_sin()` / `fr_sin()`, `qf_log2()` / `FR_log2()`, and so on.
 
----
 
-## Shared algorithms
+## Choosing between them
 
-Both libraries use the same core techniques:
-
-| Technique | qf_math | fr_math |
-|-----------|---------|---------|
-| Sine table | 512-entry full-cycle, float | 512-entry full-cycle, s15.16 fixed-point |
-| Tangent table | 512-entry full-cycle, float | 512-entry full-cycle, s15.16 |
-| BAM phase system | `uint16_t`, 65536 = full turn | `uint16_t`, 65536 = full turn |
-| Log2 table | 65-entry mantissa, float | 65-entry mantissa, s15.16 |
-| Pow2 table | 65-entry fractional, float | 65-entry fractional, s15.16 |
-| Inverse trig (atan) | Piecewise polynomial + reciprocal reduction | Piecewise polynomial + reciprocal reduction |
-| hypot_fast8 | 8-segment piecewise-linear (float) | 8-segment piecewise-linear (integer shift-only) |
-| Wave generators | BAM-phased sqr/pwm/tri/saw/noise | BAM-phased sqr/pwm/tri/saw/noise |
-| ADSR envelope | `qf_adsr_t` (float levels) | `fr_adsr_t` (fixed-point levels) |
-
-The table values are mathematically identical; only the numeric representation differs.
-
----
-
-## Key differences
-
-| Aspect | qf_math | fr_math |
-|--------|---------|---------|
-| **Numeric domain** | IEEE-754 `float` (float32) | Fixed-point integer (Q16.16 / configurable radix) |
-| **Type** | `typedef float qf` | `typedef int32_t s32` |
-| **FPU requirement** | Benefits from hardware FPU | No FPU needed; pure integer arithmetic |
+| Factor | qf_math (float) | fr_math (fixed-point) |
+|--------|-----------------|----------------------|
+| **Best targets** | Cortex-M4F/M7, ESP32, RP2040/RP2350 with FPU, any core with hardware single-precision | Cortex-M0/M0+, 8/16-bit MCUs, RISC-V without F extension, any core without FPU |
+| **Soft-float cost** | High — compiler inserts software multiply/add when no FPU is present | Zero — pure integer ALU throughout |
+| **Dynamic range** | ~1e-38 to ~3.4e+38 | Determined by radix choice (e.g. R=16: ±32K; R=12: ±512K; R=8: ±8M) |
+| **Precision** | ~7 significant digits (float32) | Determined by radix choice (e.g. R=16: ~1.5e-5 resolution; R=12: ~2.4e-4) |
+| **Typical accuracy** | < 0.002% FS (trig), < 0.001% rel (log/exp) | < 0.008% FS (trig), < 0.4% rel (log/exp) |
+| **Table ROM** | ~4.4 KB (512-entry float tables) | ~908 bytes (quadrant/octant `unsigned short` tables) |
 | **16-bit support** | Requires 32-bit float | Supports 16-bit platforms (s16 mode) |
-| **Precision** | ~7 significant digits (float32) | ~4.8 significant digits (Q16.16) |
-| **Dynamic range** | ~1e-38 to ~3.4e+38 | Fixed range determined by radix |
-| **Sqrt method** | Newton-Raphson on 1/sqrt(x) via IEEE 754 magic constant | Leading-bit + Newton-Raphson on integer representation |
+| **Language** | C99 | C89 (pre-C99 fallback typedefs for compilers without `<stdint.h>`) |
+
+In short: if the target has a hardware FPU or the pipeline already works in `float`, use qf_math. If the target has no FPU or soft-float overhead is unacceptable, use fr_math and pick the radix that fits the application's range/resolution needs. Both produce the same outputs for the same mathematical inputs — the accuracy and speed trade-offs differ with the numeric representation.
+
+
+## What they share
+
+Both libraries use BAM (Binary Angular Measure) phase, lookup-based approximation with sub-step linear interpolation, the same 8-segment piecewise-linear fast hypot, and identical waveform/ADSR API shapes.
+
+| Feature | qf_math | fr_math |
+|---------|---------|---------|
+| BAM phase | `uint16_t`, 65536 = full turn | `uint16_t`, 65536 = full turn |
+| Log2 / Pow2 tables | 65-entry, `float` | 65-entry, `u32` (s.16 fixed-point) |
+| hypot_fast8 | 8-segment piecewise-linear (float multiply) | 8-segment piecewise-linear (shift-only, no multiply) |
+| Waveforms | sqr/pwm/tri/saw/noise via BAM phase | sqr/pwm/tri/saw/noise via BAM phase |
+| ADSR | `qf_adsr_t` (float levels) | `fr_adsr_t` (fixed-point levels) |
+
+
+## Where the internals differ
+
+The table layouts and numerical methods are tuned to each domain:
+
+| Algorithm | qf_math | fr_math |
+|-----------|---------|---------|
+| **Sine table** | 512-entry **full-cycle**, `float` (2048 bytes) | 129-entry **first-quadrant**, `unsigned short` u0.15 (258 bytes); other quadrants via symmetry |
+| **Tangent table** | 512-entry **full-cycle**, `float` (2048 bytes) | 65-entry **first-octant**, `unsigned short` u0.15 (130 bytes); second octant via `tan(x) = 1/tan(pi/2 - x)` |
+| **Interpolation** | 7-bit sub-step linear interpolation | 7-bit sub-step linear interpolation + small-angle approximations near cardinals (< 0.7 deg) |
+| **Inverse trig** | Piecewise Hermite polynomial spans; atan2 via reciprocal reduction | Binary search on ascending sine quadrant table; near-1.0 fast path `acos(x) ~ sqrt(2(1-x))`; atan2 via hypot_fast8 + conditional asin/acos |
+| **Sqrt** | Newton-Raphson on `1/sqrt(x)`, seeded by IEEE 754 magic constant | Non-restoring shift-and-subtract digit-by-digit (no multiply, no divide) |
 | **Reciprocal** | IEEE 754 magic constant + Newton-Raphson | Shift-based initial estimate + Newton-Raphson |
-| **Language** | C99 | C89 |
+| **Exact hypot** | `qf_sqrt(x*x + y*y)` | `fr_isqrt64(x*x + y*y)` (64-bit integer product + digit-by-digit sqrt) |
+| **Small-angle paths** | None (table covers full range uniformly) | `sin(theta) ~ theta`, `tan(delta) ~ delta` near zero-crossings; `cot(delta) ~ 1/delta` near poles; atan2 uses `asin(x) ~ x` below ~4.8 deg |
 
----
+qf_math uses larger `float` tables (4 bytes/entry) for uniform full-cycle indexing. fr_math packs quadrant/octant tables into `unsigned short` (2 bytes/entry) and recovers the full circle via symmetry, keeping total table ROM under 1 KB.
 
-## When to use which
 
-### Use qf_math when:
+## Switching between them
 
-- Your target has a **hardware FPU** (Cortex-M4F, Cortex-M7, ESP32, most Cortex-A).
-- You already work in **float** throughout your pipeline (sensor fusion, graphics, control loops).
-- You need **wide dynamic range** (values spanning many orders of magnitude).
-- You want a **lighter alternative to libm** with predictable cost and smaller flash.
-
-### Use fr_math when:
-
-- Your target has **no FPU** (Cortex-M0/M0+, many 8/16-bit MCUs, RISC-V without F extension).
-- You want to **avoid soft-float overhead** entirely.
-- Your values stay within **fixed ranges** that map well to Q16.16 or similar formats.
-- You need **16-bit platform** support.
-- Deterministic integer timing matters more than precision.
-
----
-
-## Bridging between the two
-
-The macros in `qf_math.h` convert between `qf` floats and `fr_math`-style fixed-radix integers:
+Because the API names are parallel, porting between the two is straightforward. The main change is the numeric type and the include:
 
 ```c
-// Float to fixed-radix (truncating)
-int32_t fr_val = QF_TO_FR(1.234f, 16);    // → 80871 (Q16.16)
+/* qf_math — float pipeline */
+#include "qf_math.h"
+qf y   = qf_sin(angle);
+qf len = qf_hypot(dx, dy);
+qf dB  = 20.0f * qf_log10(v / ref);
 
-// Float to fixed-radix (rounding)
-int32_t fr_val = QF_TO_FR_RND(1.234f, 16);
-
-// Fixed-radix back to float
-qf float_val = FR_TO_QF(80871, 16);       // → ~1.234f
+/* fr_math — fixed-point pipeline (radix 16 = s15.16) */
+#define R 16
+#include "FR_math.h"
+s32 y   = fr_sin(angle, R);
+s32 len = FR_hypot(dx, dy, R);
+s32 dB  = FR_MUL(I2FR(20, R), FR_log10(FR_DIV(v, ref, R), R, R), R);
 ```
 
-Use these at system boundaries: sensor ADC → float pipeline → DAC output, or when mixing qf_math and fr_math code in the same project.
+fr_math calls carry an explicit radix parameter — change `R` to trade range for resolution. qf_math functions take and return plain `float`.
+
+### Bridging macros
+
+`qf_math.h` includes macros for converting between `float` and fixed-radix integers at system boundaries:
+
+```c
+int32_t fr_val = QF_TO_FR(1.234f, 16);     // float → Q16.16 (truncating)
+int32_t fr_val = QF_TO_FR_RND(1.234f, 16);  // float → Q16.16 (rounding)
+qf float_val   = FR_TO_QF(80871, 16);       // Q16.16 → float
+```
 
 The C++ wrapper provides the same conversions:
 
 ```cpp
 int32_t fr = qf_math::to_fr(1.234f, 16);
-qf back = qf_math::from_fr(fr, 16);
+qf back    = qf_math::from_fr(fr, 16);
 ```
 
----
 
-## Benchmark comparison context
+## Speed comparison
 
-The `compare/` harness benchmarks qf_math against fr_math (among others). When reading those numbers:
+The `compare/` harness benchmarks both libraries (and others) against libm on the same hardware. Ratios below are **libm time / library time** — values above 1.0 mean the library is faster than libm.
 
-- **Float-to-fixed bridge overhead** inflates fr_math timings on float-native hosts. The conversion cost disappears when you stay natively in fixed-point.
-- **Host desktop timings** are not representative of MCU behavior. On a Cortex-M0 without FPU, fr_math will be faster. On a Cortex-M4F with FPU, qf_math will be faster.
-- The `compare/BENCHMARK_CROSSPLATFORM.md` table merges host and MCU snapshots for side-by-side comparison.
+| Function | qf_math | fr_math | Notes |
+|----------|--------:|--------:|:------|
+| sin (rad) | **4.30**x | 1.32x | |
+| cos (rad) | **4.39**x | 0.90x | |
+| tan (rad) | **3.56**x | 1.31x | |
+| asin | 1.10x | 0.77x | |
+| acos | 1.11x | 0.77x | |
+| atan2 | **1.41**x | 0.70x | |
+| sqrt | 1.07x | 0.08x | libm sqrtf often maps to a hardware instruction |
+| exp | **2.63**x | 1.88x | |
+| ln | **2.20**x | 0.92x | |
+| hypot | **2.51**x | 0.21x | fr_math hypot goes through float bridge overhead |
 
-See [`compare/README.md`](../compare/README.md) for methodology and interpretation guidance.
+ESP32-S3 (with FPU). fr_math numbers include **float↔fixed bridge overhead** — native `s32` / `fix16_t` calls in a pure-integer pipeline are faster. See [`compare/BENCHMARK_CROSSPLATFORM.md`](../compare/BENCHMARK_CROSSPLATFORM.md) for full matrices including multiple architectures, libfixmath, FastTrig, and ESP-DSP.

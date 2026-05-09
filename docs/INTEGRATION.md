@@ -2,7 +2,6 @@
 
 How to add qf_math to your project.
 
----
 
 ## Plain C (manual)
 
@@ -22,7 +21,6 @@ qf y = qf_sin(1.0f);
 qf len = qf_hypot(dx, dy);
 ```
 
----
 
 ## CMake
 
@@ -47,7 +45,6 @@ To compile the reduced-footprint subset (no log10, pow10, waves, ADSR):
 target_compile_definitions(qf_math PRIVATE QF_MATH_LEAN)
 ```
 
----
 
 ## PlatformIO
 
@@ -84,7 +81,6 @@ Arduino IDE installs also see [`library.properties`](../library.properties) (`sr
 
 Publish check (optional): [`pio pkg pack`](https://docs.platformio.org/en/latest/core/userguide/pkg/cmd_pack.html) in the repo root must succeed.
 
----
 
 ## ESP-IDF component
 
@@ -97,7 +93,7 @@ Add to your project's `idf_component.yml`:
 ```yaml
 dependencies:
   deftio/qf_math:
-    version: ">=1.0.0"
+    version: ">=1.0.1"
 ```
 
 ### Via git submodule or local path
@@ -122,7 +118,6 @@ Then include from any application component:
 #include "qf_math.h"
 ```
 
----
 
 ## Arduino (from source)
 
@@ -148,7 +143,6 @@ void setup() {
 }
 ```
 
----
 
 ## C++ usage via qf_math.hpp
 
@@ -173,7 +167,6 @@ env.release();
 
 The wrapper adds no storage, allocation, exceptions, RTTI, or runtime dependencies beyond the C library.
 
----
 
 ## Compiler flags
 
@@ -193,5 +186,5 @@ For C++:
 
 | Define | Effect |
 |--------|--------|
-| `QF_MATH_LEAN` | Exclude log10, pow10, wave generators, ADSR (smaller footprint) |
+| `QF_MATH_LEAN` | Build the lean float core: radian trig, inverse trig, log/exp/pow core, sqrt, and `hypot_fast8`; excludes degree/BAM trig entry points, exact `hypot`, `hypot_fast2`, log10, pow10, wave generators, and ADSR. |
 | `QF_MATH_COVERAGE` | Expose internal test helpers (used by `make coverage`) |

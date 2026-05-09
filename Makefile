@@ -48,10 +48,12 @@ help:
 	@echo ""
 	@echo "Build targets:"
 	@echo "  lib            Build qf_math object file → $(BUILD)/"
-	@echo "  lib-lean       Build qf_math_lean.o (-DQF_MATH_LEAN, peer-comparable size)"
+	@echo "  lib-lean       Build qf_math_lean.o (-DQF_MATH_LEAN, minimal float core)"
 	@echo "  test           Build and run unit tests"
+	@echo "  test-lean-cpp  Build/run C++ wrapper smoke test with QF_MATH_LEAN"
 	@echo "  bench          Build and run qf_math vs libm benchmark"
-	@echo "  docs-pages     Inject fresh bench sweep into pages/index.html"
+	@echo "  pages-version  Sync pages/version.json from src/qf_math.h"
+	@echo "  docs-pages     Sync version into pages/ site"
 	@echo ""
 	@echo "Comparison (see compare/README.md):"
 	@echo "  compare-deps   Fetch libfixmath + fr_math into $(COMP_THIRD)/"
@@ -63,7 +65,7 @@ help:
 	@echo "  compare-fr-tests Run fr_math upstream makefile test suite"
 	@echo "  mcu-benchmark-snapshot  Flash MCU bench → compare/MCU_BENCHMARK_SNAPSHOT*.md (USB)"
 	@echo "  benchmark-crossplatform Merge host + MCU snapshots → compare/BENCHMARK_CROSSPLATFORM.md"
-	@echo "  benchmark-arch-speed    Build qf_math architecture speed matrix"
+	@echo "  benchmark-arch-speed    qf_math & fr_math speed-vs-libm matrix"
 	@echo ""
 	@echo "Analysis:"
 	@echo "  size           Show compiled object size"
@@ -71,10 +73,11 @@ help:
 	@echo "  coverage-check Build coverage and fail if src/qf_math.c is not 100% lines"
 	@echo ""
 	@echo "Docker (cross-compile sizes — see docker/README.md):"
-	@echo "  docker-sizes          docker/run.sh → build/docker_size_table.md"
+	@echo "  docker-sizes          docker/run.sh → build/docker_sizes.csv + docs summary"
 	@echo "  docker-sizes-rebuild  Rebuild toolchain image, then run report"
 	@echo ""
 	@echo "Maintenance:"
+	@echo "  make-release   VERSION=x.y.z release prep (optional RELEASE_ARGS=...)"
 	@echo "  clean          Remove $(BUILD) and coverage artifacts"
 
 .PHONY: dirs
@@ -89,7 +92,7 @@ lib-lean: dirs $(BUILD)/qf_math_lean.o
 $(BUILD)/qf_math.o: $(SRC) $(HDR)
 	$(CC) $(CFLAGS) -c $(SRC) -o $@
 
-# Peer-comparable subset for fair ROM sizing vs compare/ harness (no audio helpers).
+# Minimal float core for fair ROM sizing vs compare/ harness peers.
 $(BUILD)/qf_math_lean.o: $(SRC) $(HDR)
 	$(CC) $(CFLAGS) -DQF_MATH_LEAN -c $(SRC) -o $@
 
@@ -99,6 +102,12 @@ test: dirs $(BUILD)/qf_math_test $(BUILD)/qf_math_cpp_test
 	@echo ""
 	@$(BUILD)/qf_math_test
 	@$(BUILD)/qf_math_cpp_test
+
+.PHONY: test-lean-cpp
+test-lean-cpp: dirs
+	$(CC) $(CFLAGS) -DQF_MATH_LEAN -c $(SRC) -o $(BUILD)/qf_math_cpp_test_qf_math_lean.o
+	$(CXX) $(CXXFLAGS) -DQF_MATH_LEAN -I$(SRCDIR) $(CPP_TEST_SRC) $(BUILD)/qf_math_cpp_test_qf_math_lean.o $(LDFLAGS) -o $(BUILD)/qf_math_cpp_test_lean
+	@$(BUILD)/qf_math_cpp_test_lean
 
 $(BUILD)/qf_math_test: $(TEST_SRC) $(SRC) $(HDR)
 	$(CC) $(CFLAGS_WARN) -Os -std=c99 -I$(SRCDIR) $(CFLAGS_TEST) $(TEST_SRC) $(SRC) $(LDFLAGS) -o $@
@@ -114,9 +123,15 @@ $(BUILD)/qf_math_bench: $(TOOLSDIR)/qf_math_bench.c $(SRC) $(HDR)
 bench: dirs $(BUILD)/qf_math_bench
 	@$(BUILD)/qf_math_bench
 
+.PHONY: pages-version
+pages-version:
+	@v=$$(sed -n 's/^#define QF_MATH_VERSION  *"\([^"]*\)"/\1/p' src/qf_math.h) && \
+	 printf '{"version": "%s"}\n' "$$v" > pages/version.json && \
+	 echo "pages/version.json → v$$v"
+
 .PHONY: docs-pages
-docs-pages: dirs $(BUILD)/qf_math_bench
-	python3 tools/inject_docs_bench_table.py
+docs-pages: pages-version
+	@echo "pages/ updated (version synced from src/qf_math.h)"
 
 # --- compare suite ---
 .PHONY: compare-deps
@@ -198,10 +213,16 @@ coverage-check:
 .PHONY: docker-sizes
 docker-sizes:
 	@bash docker/run.sh
+	@python3 tools/update_cross_target_size_docs.py
 
 .PHONY: docker-sizes-rebuild
 docker-sizes-rebuild:
 	@bash docker/run.sh --rebuild
+	@python3 tools/update_cross_target_size_docs.py
+
+.PHONY: make-release
+make-release:
+	@python3 tools/make_release.py $(VERSION) $(RELEASE_ARGS)
 
 .PHONY: clean
 clean:

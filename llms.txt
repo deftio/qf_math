@@ -4,7 +4,7 @@
 
 ## Summary
 
-Single-file style library in `src/qf_math.c` + `src/qf_math.h`. Approximate trig, log/exp, sqrt/hypot, waves, ADSR. BSD-2-Clause. No runtime deps for the library TU.
+Single-file style library in `src/qf_math.c` + `src/qf_math.h`. Approximate float32 trig, inverse trig, log/exp/pow, sqrt/hypot, waves, and ADSR. BSD-2-Clause. No runtime deps for the library TU.
 
 ## Documentation
 
@@ -19,11 +19,14 @@ Single-file style library in `src/qf_math.c` + `src/qf_math.h`. Approximate trig
 - Bench vs libm only: `tools/qf_math_bench.c` → `make bench`
 - Multi-library compare + GitHub Markdown report: `compare/` → `make compare`, `make compare-github-report`
 - MCU on-device compare loops (needs `make compare-deps`): `examples/lilygo_t_display_s3_bench/` (PlatformIO, LilyGO T-Display-S3), `examples/esp32s3_benchmark/` (ESP-IDF), or `examples/pico2_benchmark/` (Arduino, Raspberry Pi Pico 2)
+- C++ facade: `src/qf_math.hpp` (full API by default; honors `QF_MATH_LEAN` guards)
 
 ## Build
 
-- Primary: `Makefile` at repo root (`make test`, `make lib`, `make bench`, `make compare`, `make compare-report`, `make compare-github-report`, `make compare-tests`, `make docker-sizes`, `make mcu-benchmark-snapshot`).
+- Primary: `Makefile` at repo root (`make test`, `make test-lean-cpp`, `make lib`, `make lib-lean`, `make bench`, `make compare`, `make compare-report`, `make compare-github-report`, `make compare-tests`, `make docker-sizes`, `make mcu-benchmark-snapshot`, `make make-release VERSION=x.y.z`).
 - Artifacts directory: `build/` (ignored by git); compare clones live in `build/compare/third_party/`.
+- `make docker-sizes` runs the Docker cross-build, writes the full source-of-truth matrix to `build/docker_sizes.csv`, then updates the compact generated section in `compare/README.md`.
+- `QF_MATH_LEAN` is now a minimal float core: radian trig, inverse trig, `log2`/`ln`, `pow2`/`exp`/`pow`, `sqrt`, and `qf_hypot_fast8`. It excludes degree/BAM trig entry points, exact `qf_hypot`, `qf_hypot_fast2`, `log10`/`pow10`, waves, and ADSR.
 
 ## Integration manifests
 
@@ -36,4 +39,20 @@ See `agents.md` for layout rules and safe edit boundaries.
 
 ## Version
 
-`QF_MATH_VERSION` / `QF_MATH_VERSION_HEX` in `qf_math.h`.
+Current revision: `1.0.1` (`QF_MATH_VERSION_HEX` = `0x010001`). Version macros live in `src/qf_math.h`; keep `README.md`, `docs/API.md`, `library.json`, `library.properties`, and `idf_component.yml` in sync when bumping.
+
+Use `tools/qf_version.py` for version metadata:
+
+- `python3 tools/qf_version.py show --format json|shell|markdown`
+- `python3 tools/qf_version.py update 1.0.2`
+- `python3 tools/qf_version.py verify`
+
+Use `tools/make_release.py` or `make make-release VERSION=1.0.2` for release prep. It updates version metadata, runs tests, regenerates benchmark/docs outputs, and refreshes Docker size data unless skipped.
+
+## Benchmark docs
+
+- Host report: `compare/BENCHMARK_REPORT.md` from `make compare-github-report`.
+- Cross-platform host/ESP32-S3 report: `compare/BENCHMARK_CROSSPLATFORM.md` from `make benchmark-crossplatform`.
+- qf-vs-`libm` speed matrix by snapshot: `compare/QF_MATH_ARCH_SPEED.md` (`make benchmark-arch-speed`).
+- MCU snapshots are separate files: `MCU_BENCHMARK_SNAPSHOT_ESP32S3.md`, `MCU_BENCHMARK_SNAPSHOT_PICO2_ARM.md`, and `MCU_BENCHMARK_SNAPSHOT_PICO2_RISCV.md`.
+- Docker size data is CSV-first; do not add another committed full size table unless explicitly requested.
