@@ -2,6 +2,11 @@
   "name": "qf_math",
   "version": "1.0.0",
   "description": "Fast approximate IEEE float32 math for embedded C99 (trig, log/exp, sqrt/hypot, waves, ADSR). Small flash footprint, no heap.",
+  "homepage": "https://github.com/deftio/qf_math",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/deftio/qf_math.git"
+  },
   "keywords": [
     "math",
     "float",
@@ -12,7 +17,13 @@
     "sqrt",
     "dsp",
     "audio",
-    "c99"
+    "c99",
+    "esp32",
+    "esp-idf",
+    "arduino",
+    "riscv",
+    "pico",
+    "arm"
   ],
   "authors": [
     {
@@ -25,6 +36,23 @@
   "frameworks": "*",
   "platforms": "*",
   "headers": "qf_math.h",
+  "export": {
+    "exclude": [
+      ".claude",
+      ".github",
+      ".git",
+      "build",
+      "compare",
+      "docker",
+      "pages",
+      "test",
+      "tools",
+      "docs",
+      "*.gcov",
+      "*.gcda",
+      "*.gcno"
+    ]
+  },
   "build": {
     "includeDir": "src",
     "flags": ["-std=c99"],

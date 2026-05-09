@@ -27,8 +27,8 @@ Single-file style library in `src/qf_math.c` + `src/qf_math.h`. Approximate trig
 
 ## Integration manifests
 
-- PlatformIO: `library.json`
-- ESP-IDF: `idf_component.yml`, `CMakeLists.txt` (component registration only)
+- PlatformIO: `library.json` (`pio pkg pack .` validates before publish); Arduino-compatible `library.properties`
+- ESP-IDF: `idf_component.yml` (URLs, tags, tarball excludes), `CMakeLists.txt` (component registration, no `-Werror` on consumers)
 
 ## Agent notes
 

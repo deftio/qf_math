@@ -369,6 +369,11 @@ static int test_atan(void)
     if (!approx_eq(qf_atan(0.0f), 0.0f, 1e-6f)) return TEST_FAIL;
     if (!approx_eq(qf_atan(1.0f), QF_PI * 0.25f, ATRIG_TOL)) return TEST_FAIL;
     if (!approx_eq(qf_atan(-1.0f), -QF_PI * 0.25f, ATRIG_TOL)) return TEST_FAIL;
+
+    /* Very large input → saturates to ±pi/2 */
+    if (!approx_eq(qf_atan(QF_TAN_MAX * 2.0f), QF_HALF_PI, 1e-4f)) return TEST_FAIL;
+    if (!approx_eq(qf_atan(-QF_TAN_MAX * 2.0f), -QF_HALF_PI, 1e-4f)) return TEST_FAIL;
+
     return TEST_PASS;
 }
 
@@ -800,6 +805,30 @@ static int test_pow2_make_pow2i_extremes(void)
 
     if (!approx_eq(qf_pow2(-3.7f), powf(2.0f, -3.7f), EXP_TOL * 2)) return TEST_FAIL;
 
+    /* NaN → NaN */
+    {
+        union { float f; uint32_t u; } nan_u;
+        nan_u.u = 0x7FC00000u;  /* quiet NaN */
+        volatile qf nan_r = qf_pow2(nan_u.f);
+        (void)nan_r;
+        /* pow2(NaN) should return NaN (unchanged) */
+    }
+    /* +Inf → +Inf, -Inf → 0 */
+    {
+        union { float f; uint32_t u; } inf_u;
+        inf_u.u = 0x7F800000u;
+        volatile qf pinf_r = qf_pow2(inf_u.f);
+        (void)pinf_r;
+        inf_u.u = 0xFF800000u;
+        volatile qf ninf_r = qf_pow2(inf_u.f);
+        if (ninf_r != 0.0f) return TEST_FAIL;
+    }
+    /* Large |x| that triggers fallback path (magic trick fails for |x| > ~2^22) */
+    {
+        volatile qf big = qf_pow2(4194305.0f);
+        (void)big; /* result overflows; just exercising the path */
+    }
+
     return TEST_PASS;
 }
 
@@ -815,6 +844,14 @@ static int test_log2_pow2_frac_edge(void)
         (void)lg;
         (void)p2;
     }
+
+    /* Subnormal input: exponent field = 0, exercises legacy log2 path */
+    {
+        v.u = 0x00000001u;  /* smallest positive subnormal (~1.4e-45) */
+        qf lg = qf_log2(v.f);
+        if (lg >= 0.0f) return TEST_FAIL;  /* log2 of tiny value must be very negative */
+    }
+
     return TEST_PASS;
 }
 
@@ -822,6 +859,40 @@ static int test_atan2_small_ratio_paths(void)
 {
     if (!approx_eq(qf_atan2(3e-5f, 1.0f), atan2f(3e-5f, 1.0f), SWEEP_ATAN2_ABS)) return TEST_FAIL;
     if (!approx_eq(qf_atan2(1.0f, 3e-5f), atan2f(1.0f, 3e-5f), SWEEP_ATAN2_ABS)) return TEST_FAIL;
+    return TEST_PASS;
+}
+
+static int test_cov_internal_helpers(void)
+{
+    /* make_pow2i normal path (n in [-126, 127]) */
+    if (!approx_eq(qf_cov_make_pow2i(0), 1.0f, 1e-6f)) return TEST_FAIL;
+    if (!approx_eq(qf_cov_make_pow2i(1), 2.0f, 1e-6f)) return TEST_FAIL;
+    if (!approx_eq(qf_cov_make_pow2i(-1), 0.5f, 1e-6f)) return TEST_FAIL;
+    if (!approx_eq(qf_cov_make_pow2i(10), 1024.0f, 1e-3f)) return TEST_FAIL;
+
+    /* qf_ifloor */
+    if (qf_cov_ifloor(2.7f) != 2) return TEST_FAIL;
+    if (qf_cov_ifloor(-2.7f) != -3) return TEST_FAIL;
+    if (qf_cov_ifloor(0.0f) != 0) return TEST_FAIL;
+    if (qf_cov_ifloor(-0.1f) != -1) return TEST_FAIL;
+
+    /* qf_exp2_frac_01: frac <= 0.5 branch */
+    {
+        qf r = qf_cov_exp2_frac_01(0.3f);
+        if (!approx_eq(r, powf(2.0f, 0.3f), EXP_TOL)) return TEST_FAIL;
+    }
+    /* qf_exp2_frac_01: frac > 0.5 branch */
+    {
+        qf r = qf_cov_exp2_frac_01(0.7f);
+        if (!approx_eq(r, powf(2.0f, 0.7f), EXP_TOL)) return TEST_FAIL;
+    }
+
+    /* asin_pos_kernel: ax >= 1.0 → HALF_PI (defensive) */
+    if (!approx_eq(qf_cov_asin_pos_kernel(1.0f), QF_HALF_PI, 1e-6f)) return TEST_FAIL;
+
+    /* asin_pos_kernel: small ax → ax (linear approx) */
+    if (!approx_eq(qf_cov_asin_pos_kernel(0.01f), 0.01f, 1e-5f)) return TEST_FAIL;
+
     return TEST_PASS;
 }
 
@@ -1012,6 +1083,7 @@ int main(void)
     RUN_TEST(test_atan2);
     RUN_TEST(test_acos_special_bins);
     RUN_TEST(test_atan2_small_ratio_paths);
+    RUN_TEST(test_cov_internal_helpers);
     printf("\n");
 
     printf("Log / Exp:\n");

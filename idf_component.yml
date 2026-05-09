@@ -1,6 +1,32 @@
 version: "1.0.0"
 description: >-
   Quick Float Math — approximate float32 routines (trig, log/exp, sqrt/hypot,
-  waveform helpers, ADSR) for Espressif ESP-IDF and other embedded targets.
+  waveform helpers, ADSR) for Espressif ESP-IDF. One C99 TU, no heap.
+
+url: https://github.com/deftio/qf_math
+repository: https://github.com/deftio/qf_math.git
+issues: https://github.com/deftio/qf_math/issues
+documentation: "https://github.com/deftio/qf_math#documentation"
+
 license: BSD-2-Clause
+
+tags:
+  - math
+  - float
+  - dsp
+
 dependencies: {}
+
+# Keep uploaded component blobs small — only compile-time bits are guaranteed.
+files:
+  exclude:
+    - ".git/**"
+    - ".github/**"
+    - "docker/**"
+    - "examples/**"
+    - "pages/**"
+    - "tools/**"
+    - "compare/**"
+    - "docs/**"
+    - "build/**"
+    - "test/**"

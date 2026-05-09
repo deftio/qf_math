@@ -120,13 +120,24 @@ Documentation tables live under **`compare/`** (`LIBRARIES.md` for platforms/rep
 
 ### PlatformIO
 
-Use `library.json` at the repo root: add this folder as a local library or publish following [PlatformIO library format](https://docs.platformio.org/en/latest/manifests/library-json/index.html). Headers resolve from `src/` (`#include "qf_math.h"` for C, `#include "qf_math.hpp"` for C++).
+- **Manifest:** [`library.json`](library.json) (registry: [deftio/qf_math](https://registry.platformio.org/libraries/deftio/qf_math)).
+- **`lib_deps`:** `deftio/qf_math` or `https://github.com/deftio/qf_math.git`
+- **Lean subset** (smaller ROM, no `log10` / `pow10` / waves / ADSR): add to the env `build_flags = -DQF_MATH_LEAN`
+- **`export` exclude** in the manifest trims compare/tests/docs from the PIO-installed copy; clones via **git URL** still get the full repo (including **`examples/`**).
+- Sanity check locally: `pio pkg pack .` must succeed before publishing.
+
+### Arduino Library Manager / Arduino IDE
+
+- **Manifest:** [`library.properties`](library.properties) beside `library.json` (Arduino 2.x discovers `src/` layout).
+- Install from ZIP of the repo or symlink the folder under `Arduino/libraries/`; include `#include <qf_math.h>` (Arduino adds library `src/` to the include path).
 
 ### Espressif ESP-IDF
 
-`idf_component.yml` registers the component for the ESP-IDF Component Manager. `CMakeLists.txt` wraps `idf_component_register` for `src/qf_math.c` with include path `src/`.
+- **Component Manager:** [`idf_component.yml`](idf_component.yml) + [`CMakeLists.txt`](CMakeLists.txt). Component tarball excludes bulky trees (`examples/`, `compare/`, …); **`src/`**, root **`CMakeLists.txt`**, **`LICENSE.txt`**, and **`README.md`** remain usable.
+- **Consumer projects:** `#include "qf_math.h"`; optional **`QF_MATH_LEAN`** via `target_compile_definitions` on your target or **`idf.py menuconfig`/CMake extra flags**.
+- **Warnings:** component build uses `-Wall -Wextra -Wshadow -Wconversion` **without** `-Werror` so toolchain/IDF updates are less likely to break downstream apps.
 
-Add as a dependency (path or git URL) per Espressif docs; then `#include "qf_math.h"` from application components.
+Add as a dependency (path or git URL) per Espressif docs.
 
 ---
 

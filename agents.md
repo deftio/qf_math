@@ -36,7 +36,7 @@ Guidance for automated coding agents editing this repository.
 ## Manifests
 
 - `library.json` — PlatformIO; keep `src/` as include dir.
-- `idf_component.yml` + root `CMakeLists.txt` — ESP-IDF component wiring only; fatal-error if configured standalone without `ESP_PLATFORM`.
+- `idf_component.yml` + root `CMakeLists.txt` — ESP-IDF component wiring only; fatal-error if configured standalone without `ESP_PLATFORM`. Published component uses strong warnings but not `-Werror` on the component target.
 
 ## Markdown policy
 

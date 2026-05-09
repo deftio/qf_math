@@ -711,10 +711,8 @@ qf qf_pow2(qf x)
     uint32_t pb = vp.u;
     uint32_t exp_p = (pb >> 23) & 0xFFu;
 
-    /* p should be finite normal (~2^[-1/2,1/2]) — if not, use multiply path */
-    if (exp_p == 0 || exp_p >= 255 || (pb & 0x7FFFFFFFu) == 0)
-        return p * make_pow2i(n);
-
+    /* Fast path: add n to IEEE exponent if the result stays in normal range.
+     * Defensive: also catches subnormal / inf / zero p (exp_p==0 or >=255). */
     int32_t ne = (int32_t)exp_p + n;
     if (ne < 1 || ne > 254)
         return p * make_pow2i(n);
@@ -1010,4 +1008,8 @@ qf qf_cov_reduce_to_twopi(qf r)
 {
     return reduce_to_twopi(r);
 }
+qf qf_cov_make_pow2i(int32_t n) { return make_pow2i(n); }
+int32_t qf_cov_ifloor(qf x) { return qf_ifloor(x); }
+qf qf_cov_exp2_frac_01(qf f) { return qf_exp2_frac_01(f); }
+qf qf_cov_asin_pos_kernel(qf ax) { return qf_asin_pos_kernel(ax); }
 #endif

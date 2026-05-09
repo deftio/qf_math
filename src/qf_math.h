@@ -303,6 +303,10 @@ qf  qf_adsr_step(qf_adsr_t *env);
 /* Built only when compiling tests/coverage (see Makefile `CFLAGS_TEST`). */
 #if defined(QF_MATH_COVERAGE)
 qf qf_cov_reduce_to_twopi(qf rad);
+qf qf_cov_make_pow2i(int32_t n);
+int32_t qf_cov_ifloor(qf x);
+qf qf_cov_exp2_frac_01(qf f);
+qf qf_cov_asin_pos_kernel(qf ax);
 #endif
 
 #ifdef __cplusplus

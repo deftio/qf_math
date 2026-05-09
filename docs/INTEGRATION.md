@@ -73,6 +73,17 @@ Headers resolve from `src/`:
 #include "qf_math.hpp"   // C++ wrapper (optional)
 ```
 
+Lean subset (omit `log10`, `pow10`, waves, ADSR):
+
+```ini
+build_flags =
+    -DQF_MATH_LEAN
+```
+
+Arduino IDE installs also see [`library.properties`](../library.properties) (`src/` layout).
+
+Publish check (optional): [`pio pkg pack`](https://docs.platformio.org/en/latest/core/userguide/pkg/cmd_pack.html) in the repo root must succeed.
+
 ---
 
 ## ESP-IDF component
@@ -103,7 +114,7 @@ components/
     idf_component.yml
 ```
 
-The `CMakeLists.txt` calls `idf_component_register()` to wire `src/qf_math.c` with include path `src/`.
+The root `CMakeLists.txt` registers `src/qf_math.c` with include path `src/`. Compile flags use `-Wall`/`-Wextra`/`-Wshadow`/`-Wconversion` **without** `-Werror`, so downstream apps are less likely to break on toolchain or IDF churn.
 
 Then include from any application component:
 
