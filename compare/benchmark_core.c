@@ -13,6 +13,18 @@
 #include "fix16.h"
 #include "qf_math.h"
 
+/*
+ * Hazard3 (RP2350 RISC‑V RV32IMC) has no F extension; double libm in the accuracy
+ * reference path pulls soft-double + double transcendentals into firmware even though
+ * timed loops use libm single-precision (*f). Use libm float refs there.
+ *
+ * Override: compile with -DBENCH_REF_FORCE_LIBM_DOUBLE to keep legacy double refs.
+ */
+#if defined(__riscv) && !defined(BENCH_REF_FORCE_LIBM_DOUBLE) && \
+    (!defined(__riscv_flen) || (__riscv_flen < 32))
+#define BENCH_REF_USE_LIBM_FLOAT 1
+#endif
+
 #define FR_SCAL ((float)(1u << BENCH_FR_RX))
 #define BENCH_DEG2RAD (0.017453292519943295769f)
 #define BENCH_BAM2RAD (0.00009587379924285257f)
@@ -315,6 +327,21 @@ static float fr_pow_f(float x, float y)
     return fr_q_to_float(FR_pow2(e, BENCH_FR_RX));
 }
 
+#ifdef BENCH_REF_USE_LIBM_FLOAT
+static double bench_tan_reference_from_rad_f(float rad)
+{
+    float c = cosf(rad);
+    if (fabsf(c) < 1e-6f)
+        return (double)QF_TAN_MAX;
+
+    float t = tanf(rad);
+    if (t > QF_TAN_MAX)
+        return (double)QF_TAN_MAX;
+    if (t < -QF_TAN_MAX)
+        return -(double)QF_TAN_MAX;
+    return (double)t;
+}
+#else
 static double bench_tan_reference(double rad)
 {
     double c = cos(rad);
@@ -328,6 +355,7 @@ static double bench_tan_reference(double rad)
         return -(double)QF_TAN_MAX;
     return t;
 }
+#endif
 
 static double bench_tan_limit_for_lib(int lib_idx, int func_idx)
 {
@@ -563,6 +591,33 @@ static void bench_fill_inputs(int func_idx)
 
 static double bench_ref_unary(int func_idx, float x)
 {
+#ifdef BENCH_REF_USE_LIBM_FLOAT
+    switch (func_idx) {
+    case BENCH_F_SIN: return (double)sinf(x);
+    case BENCH_F_SIN_DEG: return (double)sinf(x * BENCH_DEG2RAD);
+    case BENCH_F_SIN_BAM:
+        return (double)sinf((float)((uint16_t)((int32_t)x)) * BENCH_BAM2RAD);
+    case BENCH_F_COS: return (double)cosf(x);
+    case BENCH_F_COS_DEG: return (double)cosf(x * BENCH_DEG2RAD);
+    case BENCH_F_COS_BAM:
+        return (double)cosf((float)((uint16_t)((int32_t)x)) * BENCH_BAM2RAD);
+    case BENCH_F_TAN: return bench_tan_reference_from_rad_f(x);
+    case BENCH_F_TAN_DEG: return bench_tan_reference_from_rad_f(x * BENCH_DEG2RAD);
+    case BENCH_F_TAN_BAM:
+        return bench_tan_reference_from_rad_f((float)((uint16_t)((int32_t)x)) * BENCH_BAM2RAD);
+    case BENCH_F_ASIN: return (double)asinf(x);
+    case BENCH_F_ACOS: return (double)acosf(x);
+    case BENCH_F_ATAN: return (double)atanf(x);
+    case BENCH_F_SQRT: return (double)sqrtf(x);
+    case BENCH_F_LOG2: return (double)log2f(x);
+    case BENCH_F_LN: return (double)logf(x);
+    case BENCH_F_LOG10: return (double)log10f(x);
+    case BENCH_F_POW2: return (double)exp2f(x);
+    case BENCH_F_EXP: return (double)expf(x);
+    case BENCH_F_POW10: return (double)powf(10.0f, x);
+    default: return NAN;
+    }
+#else
     switch (func_idx) {
     case BENCH_F_SIN: return sin((double)x);
     case BENCH_F_SIN_DEG: return sin((double)x * (double)BENCH_DEG2RAD);
@@ -585,10 +640,21 @@ static double bench_ref_unary(int func_idx, float x)
     case BENCH_F_POW10: return pow(10.0, (double)x);
     default: return NAN;
     }
+#endif
 }
 
 static double bench_ref_binary(int func_idx, float a, float b)
 {
+#ifdef BENCH_REF_USE_LIBM_FLOAT
+    switch (func_idx) {
+    case BENCH_F_ATAN2: return (double)atan2f(a, b);
+    case BENCH_F_HYPOT: return (double)hypotf(a, b);
+    case BENCH_F_HYPOT_FAST2: return (double)hypotf(a, b);
+    case BENCH_F_HYPOT_FAST: return (double)hypotf(a, b);
+    case BENCH_F_POW: return (double)powf(a, b);
+    default: return NAN;
+    }
+#else
     switch (func_idx) {
     case BENCH_F_ATAN2: return atan2((double)a, (double)b);
     case BENCH_F_HYPOT: return hypot((double)a, (double)b);
@@ -597,6 +663,7 @@ static double bench_ref_binary(int func_idx, float a, float b)
     case BENCH_F_POW: return pow((double)a, (double)b);
     default: return NAN;
     }
+#endif
 }
 
 static void bench_track_metric(err2_t *e, int func_idx, double ref, double got)
@@ -1052,6 +1119,7 @@ static float libm_tan_deg_f(float x) { return tanf(x * BENCH_DEG2RAD); }
 static float libm_sin_bam_f(float x) { return sinf((float)((uint16_t)((int32_t)x)) * BENCH_BAM2RAD); }
 static float libm_cos_bam_f(float x) { return cosf((float)((uint16_t)((int32_t)x)) * BENCH_BAM2RAD); }
 static float libm_tan_bam_f(float x) { return tanf((float)((uint16_t)((int32_t)x)) * BENCH_BAM2RAD); }
+/* Inverse trig timings use C99 float entry points (`asinf`, …), same width as `qf_*`. */
 static float libm_asin_f(float x) { return asinf(x); }
 static float libm_acos_f(float x) { return acosf(x); }
 static float libm_atan_f(float x) { return atanf(x); }

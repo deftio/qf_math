@@ -1,1 +1,1 @@
-#include "/Users/manu/deftio/qf_math/src/qf_math.c"
+#include "../../src/qf_math.c"
