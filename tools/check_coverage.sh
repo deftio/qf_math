@@ -36,8 +36,6 @@ else
 fi
 
 echo "--- gcov line summary (src/qf_math.c) ---"
-grep -v '^[[:space:]]*-:[[:space:]]*0:' "$GCOV_FILE" | grep '^[[:space:]]*[0-9]' | head -5 >/dev/null
-gcov -r "$GCOV_FILE" 2>/dev/null || true
 
 if grep -q '#####:' "$GCOV_FILE"; then
   echo ""

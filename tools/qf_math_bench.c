@@ -10,6 +10,11 @@
  *  All rights reserved. BSD-2-Clause — see qf_math.h for full text.
  */
 
+/* Enable clock_gettime / CLOCK_MONOTONIC on glibc with -std=c99 */
+#if !defined(_POSIX_C_SOURCE) && !defined(__APPLE__)
+#define _POSIX_C_SOURCE 199309L
+#endif
+
 #include <stdio.h>
 #include <math.h>
 #include <stdint.h>

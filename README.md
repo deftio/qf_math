@@ -13,7 +13,7 @@
 
 **qf_math** is a compact, dependency-free C99 library for **fast approximate math on IEEE-754 `float`**. It targets embedded firmware where you want predictable cost and small flash footprint: table-driven trig, logarithms, exponentials, `sqrt`, `hypot`, waveform helpers, and a floating-point ADSR envelope—without pulling in full libm semantics on platforms where that matters.
 
-[github.com/deftio/fr_math](github.com/deftio/fr_math) is the fixed point (pure integer) cousin of this library with identical apis.
+[fr_math](github.com/deftio/fr_math) is the fixed point (pure integer) cousin of this library with identical apis.
 
 | | |
 |---|---|
@@ -24,7 +24,6 @@
 
 Version macros live in [`qf_math.h`](src/qf_math.h): `QF_MATH_VERSION` / `QF_MATH_VERSION_HEX`. When you bump the version string, update the **Version** badge at the top of this README to match.
 
----
 
 ## Why use this?
 
@@ -33,13 +32,11 @@ Version macros live in [`qf_math.h`](src/qf_math.h): `QF_MATH_VERSION` / `QF_MAT
 - **Explicit trade-offs**: worst-case errors are documented in headers (e.g. trig ~3e-5 class behavior vs libm doubles).
 - **No heap**, minimal stack depth in normal use, integer-friendly helpers (`QF_*` macros, BAM phase, fixed-radix bridges).
 
----
 
 ## FPU-less alternative: [`fr_math`](https://github.com/deftio/fr_math)
 
 For targets **without a hardware FPU** (or when you want to avoid soft-float cost), use **[fr_math](https://github.com/deftio/fr_math)**—a **battle-tested** sister library that exposes the **same API** using **pure fixed-point** math, with **16-bit** platform support when that is a requirement.
 
----
 
 ## Repository layout
 
@@ -57,7 +54,6 @@ build/         compiled binaries, CMake outputs, cloned deps (gitignored)
 
 Everything that resembles an artifact—including vendored comparison libraries—stays under **`build/`** (for example `build/compare/third_party/`) so your tree stays clean.
 
----
 
 ## Build & test (host)
 
@@ -78,7 +74,6 @@ make coverage-check  # CI-style gate: 100% lines covered in src/qf_math.c
 make clean
 ```
 
----
 
 ## Cross-compile code sizes (Docker)
 
@@ -91,7 +86,6 @@ make docker-sizes-rebuild   # force docker image rebuild first
 
 Details: **[docker/README.md](docker/README.md)**.
 
----
 
 ## Comparisons vs other math stacks (`compare/`)
 
@@ -114,32 +108,19 @@ Documentation tables live under **`compare/`** (`LIBRARIES.md` for platforms/rep
 
 **Host vs MCU (relative only):** **[compare/BENCHMARK_CROSSPLATFORM.md](compare/BENCHMARK_CROSSPLATFORM.md)** merges **Speed vs libm** tables from [`compare/BENCHMARK_REPORT.md`](compare/BENCHMARK_REPORT.md) (POSIX snapshot) and the MCU snapshots (`MCU_BENCHMARK_SNAPSHOT*.md` — ESP32-S3, Pico 2 ARM, Pico 2 RISC-V); regenerate with **`make benchmark-crossplatform`** after refreshing those files.
 
----
 
 ## Packaging & integration
 
 ### PlatformIO
 
-- **Manifest:** [`library.json`](library.json) (registry: [deftio/qf_math](https://registry.platformio.org/libraries/deftio/qf_math)).
-- **`lib_deps`:** `deftio/qf_math` or `https://github.com/deftio/qf_math.git`
-- **Lean subset** (smaller ROM, no `log10` / `pow10` / waves / ADSR): add to the env `build_flags = -DQF_MATH_LEAN`
-- **`export` exclude** in the manifest trims compare/tests/docs from the PIO-installed copy; clones via **git URL** still get the full repo (including **`examples/`**).
-- Sanity check locally: `pio pkg pack .` must succeed before publishing.
-
-### Arduino Library Manager / Arduino IDE
-
-- **Manifest:** [`library.properties`](library.properties) beside `library.json` (Arduino 2.x discovers `src/` layout).
-- Install from ZIP of the repo or symlink the folder under `Arduino/libraries/`; include `#include <qf_math.h>` (Arduino adds library `src/` to the include path).
+Use `library.json` at the repo root: add this folder as a local library or publish following [PlatformIO library format](https://docs.platformio.org/en/latest/manifests/library-json/index.html). Headers resolve from `src/` (`#include "qf_math.h"` for C, `#include "qf_math.hpp"` for C++).
 
 ### Espressif ESP-IDF
 
-- **Component Manager:** [`idf_component.yml`](idf_component.yml) + [`CMakeLists.txt`](CMakeLists.txt). Component tarball excludes bulky trees (`examples/`, `compare/`, …); **`src/`**, root **`CMakeLists.txt`**, **`LICENSE.txt`**, and **`README.md`** remain usable.
-- **Consumer projects:** `#include "qf_math.h"`; optional **`QF_MATH_LEAN`** via `target_compile_definitions` on your target or **`idf.py menuconfig`/CMake extra flags**.
-- **Warnings:** component build uses `-Wall -Wextra -Wshadow -Wconversion` **without** `-Werror` so toolchain/IDF updates are less likely to break downstream apps.
+`idf_component.yml` registers the component for the ESP-IDF Component Manager. `CMakeLists.txt` wraps `idf_component_register` for `src/qf_math.c` with include path `src/`.
 
-Add as a dependency (path or git URL) per Espressif docs.
+Add as a dependency (path or git URL) per Espressif docs; then `#include "qf_math.h"` from application components.
 
----
 
 ## API overview
 
@@ -153,7 +134,6 @@ Public surface is declared in `src/qf_math.h`:
 
 Domain violations (`sqrt` of negative, `log` of non-positive) return `QF_DOMAIN_ERROR`.
 
----
 
 ## Documentation for automation
 
@@ -167,7 +147,6 @@ Domain violations (`sqrt` of negative, `log` of non-positive) return `QF_DOMAIN_
 | `llms.txt` | Compact index for LLM tooling / crawling |
 | `agents.md` | Conventions for coding agents working in this repo |
 
----
 
 ## Contributing & correctness
 
@@ -175,7 +154,6 @@ Domain violations (`sqrt` of negative, `log` of non-positive) return `QF_DOMAIN_
 - Keep binaries and fetched trees under `build/` only.
 - Match existing comment and license style in touched files.
 
----
 
 ## Credits
 

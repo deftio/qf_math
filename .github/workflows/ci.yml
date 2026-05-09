@@ -1,6 +1,6 @@
 # CI for qf_math — tests, strict library build, 100% line coverage on src/qf_math.c,
-# and sync of an annotated git tag v<QF_MATH_VERSION> so the version appears under
-# the GitHub repo “Tags” / Releases sidebar when pushing to main.
+# and sync of an annotated git tag + GitHub Release for v<QF_MATH_VERSION> when
+# pushing to main.
 
 name: CI
 
@@ -36,8 +36,10 @@ jobs:
           v=$(awk '/^#define QF_MATH_VERSION[[:space:]]/ {gsub(/"/,"",$3); print $3; exit}' src/qf_math.h)
           echo "value=$v" >> "$GITHUB_OUTPUT"
 
-      - name: Push tag v${{ steps.ver.outputs.value }} (main only, if missing)
+      - name: Tag and release v${{ steps.ver.outputs.value }} (main only, if missing)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           TAG="v${{ steps.ver.outputs.value }}"
@@ -50,3 +52,6 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -a "$TAG" -m "qf_math ${{ steps.ver.outputs.value }}" "$GITHUB_SHA"
           git push origin "refs/tags/$TAG"
+          gh release create "$TAG" --title "qf_math ${{ steps.ver.outputs.value }}" \
+            --notes "Release ${{ steps.ver.outputs.value }} — see [README](https://github.com/${{ github.repository }}#readme) for API overview and [CHANGELOG commits](https://github.com/${{ github.repository }}/commits/$TAG)." \
+            --verify-tag
