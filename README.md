@@ -13,7 +13,7 @@
 **qf_math** is a lightweight library for fast approximate math on IEEE-754 `float` — built for ARM Cortex-M, RISC-V, Xtensa/ESP32, and any 32-bit target. One translation unit, no heap, no dependencies, no FPU required (but benefits from one). Drop it into firmware for predictable-cost trig, log, exp, sqrt, hypot, waveforms, and ADSR — without pulling in full libm.  
 
 Need fixed point?:  **[fr_math](https://github.com/deftio/fr_math)** is the fixed-point (pure integer) cousin with the same API.  
-Docs: **[qf_math docs](https://deftio.github.io/qf_math/pages)** html pages for this library with algorithms, example code, metrics.  
+Docs: **[qf_math docs](https://deftio.github.io/qf_math/)** html pages for this library with algorithms, example code, metrics.  
 
 ## Float or fixed-point?  
 Depending on whether the target has hardware floating point support different chocies may be appropriate.
