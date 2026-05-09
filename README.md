@@ -10,26 +10,27 @@
 
 # Quick Float Math (`qf_math`)
 
-**qf_math** is a lightweight library for **fast approximate math on IEEE-754 `float`** — built for ARM Cortex-M, RISC-V, Xtensa/ESP32, and any 32-bit target. One translation unit, no heap, no dependencies, no FPU required (but benefits from one). Drop it into firmware for predictable-cost trig, log, exp, sqrt, hypot, waveforms, and ADSR — without pulling in full libm.
+**qf_math** is a lightweight library for fast approximate math on IEEE-754 `float` — built for ARM Cortex-M, RISC-V, Xtensa/ESP32, and any 32-bit target. One translation unit, no heap, no dependencies, no FPU required (but benefits from one). Drop it into firmware for predictable-cost trig, log, exp, sqrt, hypot, waveforms, and ADSR — without pulling in full libm.  
 
-**[fr_math](https://github.com/deftio/fr_math)** is the **fixed-point (pure integer)** cousin with the same API family.
+Need fixed point?:  **[fr_math](https://github.com/deftio/fr_math)** is the fixed-point (pure integer) cousin with the same API.  
+Docs: **[qf_math docs](https://deftio.github.io/qf_math/pages)** html pages for this library with algorithms, example code, metrics.  
 
-
-## Float or fixed-point?
+## Float or fixed-point?  
+Depending on whether the target has hardware floating point support different chocies may be appropriate.
 
 | | **qf_math** (this library) | **[fr_math](https://github.com/deftio/fr_math)** |
 |---|---|---|
-| **Representation** | IEEE-754 `float` (32-bit) | Q16.16 fixed-point (`int32_t`) |
+| **Representation** | IEEE-754 `float` (32-bit) | Caller-selectable fixed-radix `int32_t` (e.g. s15.16, s19.12, s23.8) |
 | **Best on** | Cortex-M4F/M7, ESP32, RP2040/RP2350 with FPU | Cortex-M0/M3, 8/16-bit MCUs, no-FPU targets |
 | **Soft-float cost** | High (compiler inserts sw multiply/add) | Zero (integer ALU only) |
-| **Dynamic range** | ~1e-38 to ~3e+38 | ~-32768 to ~+32767.9999 |
+| **Dynamic range** | ~1e-38 to ~3e+38 | Determined by radix (e.g. R=16: ±32K; R=12: ±512K; R=8: ±8M) |
 | **Typical accuracy** | < 0.002% FS (trig), < 0.001% rel (log/exp) | < 0.008% FS (trig), < 0.4% rel (log/exp) |
 | **Code size** | ~10 KB (full), ~9 KB (lean) | ~10 KB (full), ~5 KB (lean) |
 
 
 ## Accuracy — qf_math vs fr_math vs libm
 
-Peak error from identical benchmark grids. Both libraries use the same approximation strategies (BAM phase, sub-step interpolation, piecewise hypot) — the accuracy difference comes from float vs fixed-point arithmetic.
+Peak error from identical benchmark test suites. Both libraries use the  approximation strategies (BAM phase, sub-step interpolation, poly interpolation,  etc) with differences from quantization and dynamic range tradeoffs.
 
 | Function | Metric | libm | **qf_math** | **fr_math** |
 |:---------|:-------|-----:|------------:|------------:|
@@ -173,7 +174,7 @@ Documentation tables live under **`compare/`** (`LIBRARIES.md` for platforms/rep
 | Target | What it does |
 |--------|----------------|
 | `make compare-deps` | Shallow-clones **[libfixmath](https://github.com/PetteriAimonen/libfixmath)** (MIT) and **[fr_math](https://github.com/deftio/fr_math)** into `build/compare/third_party/`. |
-| `make compare` | Builds `build/compare/benchmark_suite` — accuracy + wall-clock for **qf_math**, **libm**, **libfixmath** (float bridge), **fr_math** (Q16.16 bridge), and a **Taylor poly** baseline. |
+| `make compare` | Builds `build/compare/benchmark_suite` — accuracy + wall-clock for **qf_math**, **libm**, **libfixmath** (float bridge), **fr_math** (fixed-point bridge), and a **Taylor poly** baseline. |
 | `make compare-github-report` | Regenerates **[`compare/BENCHMARK_REPORT.md`](compare/BENCHMARK_REPORT.md)** for GitHub. |
 | `make mcu-benchmark-snapshot` | Flash MCU bench and rewrite **`compare/MCU_BENCHMARK_SNAPSHOT*.md`** via UART. |
 | `make benchmark-crossplatform` | Rewrite **[`compare/BENCHMARK_CROSSPLATFORM.md`](compare/BENCHMARK_CROSSPLATFORM.md)** — Host + MCU ratios from committed snapshots. |
