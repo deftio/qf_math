@@ -22,13 +22,13 @@ These rows are printed by `examples/lilygo_t_display_s3_bench/` after the portab
 
 | Name | Link | Current harness coverage | Notes |
 |------|------|--------------------------|-------|
-| **FastTrig** | [RobTillaart/FastTrig](https://github.com/RobTillaart/FastTrig) | `sin`, `cos` | Pulled as a PlatformIO library; degree-based API is wrapped for radian inputs. |
+| **FastTrig** | [RobTillaart/FastTrig](https://github.com/RobTillaart/FastTrig) | `sin`, `cos`, `asin`, `acos`, `atan`, `atan2` | Pulled as a PlatformIO library; degree-based APIs are wrapped for radian inputs/outputs. |
 | **ESP-DSP** | [espressif/esp-dsp](https://github.com/espressif/esp-dsp) | `sqrt` | Uses the scalar `dsps_sqrtf_f32_ansi` approximation locally; the full repo pulls demo apps under PlatformIO. |
 | **espp/math** | [esp-cpp/espp](https://github.com/esp-cpp/espp) | `sin`, `cos`, `sqrt`, `ln` | Uses a local header-only subset of `components/math/include/fast_math.hpp`; the full component tree is too large for this Arduino benchmark dependency path. |
 
 ---
 
-## Embedded / MCU stacks people actually cite
+## Embedded / MCU stacks 
 
 Compact trig, log, or full **single-precision** suites aimed at **small flash** or **soft-float** MCUs (C, assembly, or Arduino wrappers).
 
@@ -61,9 +61,9 @@ High throughput on **x86/ARM NEON** with vector ISAs — great for desktops and 
 
 ## Future coverage expansions
 
-The ESP32-S3 run now includes FastTrig, ESP-DSP sqrt, and espp/math helpers. Remaining work is broader function coverage for those rows plus non-ESP32 libraries:
+The ESP32-S3 run now includes FastTrig, ESP-DSP sqrt, espp/math helpers, and inverse trig rows for float-domain scalar peers. Remaining work is broader function coverage for those rows plus non-ESP32 libraries:
 
-- **FastTrig** — broaden LilyGO coverage beyond `sin`/`cos` if `tan` / `atan2` accuracy ranges are useful.
+- **FastTrig** — broaden LilyGO coverage beyond current trig/inverse-trig rows if `tan`, `hypot`, or lower-level integer APIs are useful.
 - **ESP-DSP** — investigate meaningful scalar or generator-based `sin`/`cos` comparisons; today only `sqrt` is a direct scalar fit.
 - **espp/math** — keep the local subset aligned with upstream `fast_math.hpp`; consider a true ESP-IDF component benchmark separately from Arduino/PlatformIO.
 - **ArmMathM0** — strong Arm-only story for **float** MCUs; good for a Cortex-M0/M0+ target, not the ESP32-S3 run.

@@ -39,6 +39,7 @@ help:
 	@echo ""
 	@echo "Build targets:"
 	@echo "  lib            Build qf_math object file → $(BUILD)/"
+	@echo "  lib-lean       Build qf_math_lean.o (-DQF_MATH_LEAN, peer-comparable size)"
 	@echo "  test           Build and run unit tests"
 	@echo "  bench          Build and run qf_math vs libm benchmark"
 	@echo "  docs-pages     Inject fresh bench sweep into docs/pages/index.html"
@@ -70,11 +71,17 @@ help:
 dirs:
 	@mkdir -p $(BUILD)
 
-.PHONY: lib
+.PHONY: lib lib-lean
 lib: dirs $(BUILD)/qf_math.o
+
+lib-lean: dirs $(BUILD)/qf_math_lean.o
 
 $(BUILD)/qf_math.o: $(SRC) $(HDR)
 	$(CC) $(CFLAGS) -c $(SRC) -o $@
+
+# Peer-comparable subset for fair ROM sizing vs compare/ harness (no audio helpers).
+$(BUILD)/qf_math_lean.o: $(SRC) $(HDR)
+	$(CC) $(CFLAGS) -DQF_MATH_LEAN -c $(SRC) -o $@
 
 .PHONY: test
 test: dirs $(BUILD)/qf_math_test
@@ -125,11 +132,11 @@ compare compare-matrix: dirs compare-deps $(COMPARE_BIN)
 	@$(COMPARE_BIN)
 
 .PHONY: compare-report
-compare-report: lib compare-deps $(LIBFIXMATH_OBJS) $(FR_MATH_OBJ)
-	@bash compare/report_sizes.sh "$(BUILD)/qf_math.o" "$(FR_MATH_OBJ)" $(LIBFIXMATH_OBJS)
+compare-report: lib lib-lean compare-deps $(LIBFIXMATH_OBJS) $(FR_MATH_OBJ)
+	@bash compare/report_sizes.sh "$(BUILD)/qf_math.o" "$(BUILD)/qf_math_lean.o" "$(FR_MATH_OBJ)" $(LIBFIXMATH_OBJS)
 
 .PHONY: compare-github-report
-compare-github-report: lib compare-deps $(COMPARE_BIN) $(LIBFIXMATH_OBJS) $(FR_MATH_OBJ)
+compare-github-report: lib lib-lean compare-deps $(COMPARE_BIN) $(LIBFIXMATH_OBJS) $(FR_MATH_OBJ)
 	@bash compare/gen_github_report.sh
 
 .PHONY: compare-fr-tests

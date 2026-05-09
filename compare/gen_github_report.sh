@@ -5,6 +5,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="$ROOT/compare/BENCHMARK_REPORT.md"
 BIN="$ROOT/build/compare/benchmark_suite"
 QF_O="$ROOT/build/qf_math.o"
+QF_LEAN_O="$ROOT/build/qf_math_lean.o"
 FR_O="$ROOT/build/compare/obj/fr_math.o"
 
 shopt -s nullglob
@@ -20,7 +21,7 @@ fi
   echo
   "$BIN" --markdown-body
   echo
-  bash "$ROOT/compare/report_sizes.sh" "$QF_O" "$FR_O" "${LF_OBJS[@]}"
+  bash "$ROOT/compare/report_sizes.sh" "$QF_O" "$QF_LEAN_O" "$FR_O" "${LF_OBJS[@]}"
   echo
   cat "$ROOT/compare/GITHUB_REPORT_FOOTER.md"
 } > "$OUT"

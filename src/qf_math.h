@@ -2,7 +2,8 @@
  *  @file qf_math.h - QF_MATH: Quick Float Math Library
  *
  *  Fast approximate math on IEEE 754 float32. Table-based trig, log, exp,
- *  sqrt, hypot, wave generators, and ADSR — all in ~5 KB of portable C99.
+ *  sqrt, hypot, wave generators, and ADSR — all in one translation unit (~few–10 KB
+ *  @ -Os depending on feature set).
  *  No external dependencies (no libm required).
  *
  *  @author M A Chatterjee <deftio [at] deftio [dot] com>
@@ -135,6 +136,18 @@ typedef float qf;
  */
 #define QF_DOMAIN_ERROR (-1.0e30f)
 
+/**
+ * When defined, compile a **peer-comparable** subset: radian/deg/BAM trig, inverse
+ * trig, log2/ln, pow2/exp, sqrt, hypot/hypot_fast8 — omit **log10**, **pow10**, wave
+ * generators, and ADSR. Use for ROM sizing next to `compare/` harness peers; default
+ * builds ship the full API.
+ */
+#ifdef QF_MATH_LEAN
+#define QF_MATH_LEAN_BUILD 1
+#else
+#define QF_MATH_LEAN_BUILD 0
+#endif
+
 /*===============================================
  * Trig — table-based fast approximations
  *
@@ -187,8 +200,9 @@ qf qf_atan2(qf y, qf x);
  */
 qf qf_log2(qf x);
 qf qf_ln(qf x);
+#if !QF_MATH_LEAN_BUILD
 qf qf_log10(qf x);
-
+#endif
 /*===============================================
  * Exponentials — table-based fast approximations
  *
@@ -197,7 +211,9 @@ qf qf_log10(qf x);
  */
 qf qf_pow2(qf x);
 qf qf_exp(qf x);
+#if !QF_MATH_LEAN_BUILD
 qf qf_pow10(qf x);
+#endif
 
 /*===============================================
  * Square root and magnitude
@@ -228,6 +244,7 @@ qf qf_hypot_fast8(qf x, qf y);
 #define QF_HZ2BAM_INC(hz, sample_rate) \
     ((uint16_t)(((uint32_t)(hz) * 65536UL) / (uint32_t)(sample_rate)))
 
+#if !QF_MATH_LEAN_BUILD
 qf qf_wave_sqr(uint16_t phase);
 qf qf_wave_pwm(uint16_t phase, uint16_t duty);
 qf qf_wave_tri(uint16_t phase);
@@ -271,6 +288,7 @@ void qf_adsr_init(qf_adsr_t *env,
 void qf_adsr_trigger(qf_adsr_t *env);
 void qf_adsr_release(qf_adsr_t *env);
 qf  qf_adsr_step(qf_adsr_t *env);
+#endif /* !QF_MATH_LEAN_BUILD */
 
 /* Built only when compiling tests/coverage (see Makefile `CFLAGS_TEST`). */
 #if defined(QF_MATH_COVERAGE)

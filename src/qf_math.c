@@ -45,10 +45,16 @@
  * Forward sin/cos/tan lookup uses index = bam >> 7 and frac = bam & 0x7f. */
 #define QF_TRIG_CYCLE_BITS 9
 #define QF_TRIG_CYCLE_SIZE (1 << QF_TRIG_CYCLE_BITS)  /* 512 */
+#define QF_TRIG_TABLE_SIZE (QF_TRIG_CYCLE_SIZE + 1)    /* sentinel repeats entry 0 */
 #define QF_TRIG_CYCLE_MASK (QF_TRIG_CYCLE_SIZE - 1)
 #define QF_TRIG_FRAC_BITS  7
-#define QF_TRIG_FRAC_MASK  ((1u << QF_TRIG_FRAC_BITS) - 1u)
-#define QF_FRAC7_SCALE     0.0078125f                 /* exact 2^-7 */
+#define QF_BAM_UNIT_FRAC_BITS 7
+#define QF_BAM_UNIT_SCALE 128.0f
+#define QF_INV_BAM_UNIT_SCALE 0.0078125f
+#define QF_TRIG_PHASE_FRAC_BITS (QF_TRIG_FRAC_BITS + QF_BAM_UNIT_FRAC_BITS)
+#define QF_TRIG_PHASE_FRAC_MASK ((1u << QF_TRIG_PHASE_FRAC_BITS) - 1u)
+#define QF_TRIG_PHASE_FRAC_SCALE 0.00006103515625f     /* exact 2^-14 */
+#define QF_BAM_PHASE_MASK  ((1u << (16 + QF_BAM_UNIT_FRAC_BITS)) - 1u)
 #define SIN_QUAD_SIZE      129
 #define SIN_STEP_RAD       0.01227185f                /* (pi / 2) / 128 */
 
@@ -62,7 +68,7 @@
 #define QF_INV_32768     0.000030517578125f
 #define QF_INV_16384     0.00006103515625f
 
-static const qf gSIN_TAB[QF_TRIG_CYCLE_SIZE] = {
+static const qf gSIN_TAB[QF_TRIG_TABLE_SIZE] = {
     0.00000000f,    0.01227154f,    0.02454123f,    0.03680722f,    0.04906767f,    0.06132074f,    0.07356456f,    0.08579731f,
     0.09801714f,    0.11022221f,    0.12241068f,    0.13458071f,    0.14673047f,    0.15885814f,    0.17096189f,    0.18303989f,
     0.19509032f,    0.20711138f,    0.21910124f,    0.23105811f,    0.24298018f,    0.25486566f,    0.26671276f,    0.27851969f,
@@ -126,10 +132,11 @@ static const qf gSIN_TAB[QF_TRIG_CYCLE_SIZE] = {
     -0.38268343f,    -0.37131719f,    -0.35989504f,    -0.34841868f,    -0.33688985f,    -0.32531029f,    -0.31368174f,    -0.30200595f,
     -0.29028468f,    -0.27851969f,    -0.26671276f,    -0.25486566f,    -0.24298018f,    -0.23105811f,    -0.21910124f,    -0.20711138f,
     -0.19509032f,    -0.18303989f,    -0.17096189f,    -0.15885814f,    -0.14673047f,    -0.13458071f,    -0.12241068f,    -0.11022221f,
-    -0.09801714f,    -0.08579731f,    -0.07356456f,    -0.06132074f,    -0.04906767f,    -0.03680722f,    -0.02454123f,    -0.01227154f
+    -0.09801714f,    -0.08579731f,    -0.07356456f,    -0.06132074f,    -0.04906767f,    -0.03680722f,    -0.02454123f,    -0.01227154f,
+    0.00000000f
 };
 
-static const qf gTAN_TAB[QF_TRIG_CYCLE_SIZE] = {
+static const qf gTAN_TAB[QF_TRIG_TABLE_SIZE] = {
     0.00000000f,    0.01227246f,    0.02454862f,    0.03683218f,    0.04912685f,    0.06143635f,    0.07376443f,    0.08611485f,
     0.09849140f,    0.11089791f,    0.12333824f,    0.13581628f,    0.14833599f,    0.16090136f,    0.17351646f,    0.18618540f,
     0.19891237f,    0.21170162f,    0.22455751f,    0.23748445f,    0.25048696f,    0.26356966f,    0.27673727f,    0.28999463f,
@@ -193,7 +200,8 @@ static const qf gTAN_TAB[QF_TRIG_CYCLE_SIZE] = {
     -0.41421356f,    -0.39990820f,    -0.38574257f,    -0.37171042f,    -0.35780572f,    -0.34402260f,    -0.33035538f,    -0.31679853f,
     -0.30334668f,    -0.28999463f,    -0.27673727f,    -0.26356966f,    -0.25048696f,    -0.23748445f,    -0.22455751f,    -0.21170162f,
     -0.19891237f,    -0.18618540f,    -0.17351646f,    -0.16090136f,    -0.14833599f,    -0.13581628f,    -0.12333824f,    -0.11089791f,
-    -0.09849140f,    -0.08611485f,    -0.07376443f,    -0.06143635f,    -0.04912685f,    -0.03683218f,    -0.02454862f,    -0.01227246f
+    -0.09849140f,    -0.08611485f,    -0.07376443f,    -0.06143635f,    -0.04912685f,    -0.03683218f,    -0.02454862f,    -0.01227246f,
+    0.00000000f
 };
 
 /* 2^f table for f in [0, 1], 65 entries.
@@ -262,6 +270,7 @@ static qf qf_inv_pos(qf x)
     return y;
 }
 
+#if !QF_MATH_LEAN_BUILD
 static qf qf_inv_pos_up(qf x)
 {
     union { qf f; uint32_t u; } v;
@@ -270,17 +279,9 @@ static qf qf_inv_pos_up(qf x)
         v.u++;
     return v.f;
 }
+#endif
 
-static qf qf_lerp_frac7(qf lo, qf hi, uint32_t frac)
-{
-    return lo + (hi - lo) * ((qf)frac * QF_FRAC7_SCALE);
-}
-
-static qf qf_lerp_frac(qf lo, qf hi, qf frac)
-{
-    return lo + (hi - lo) * frac;
-}
-
+#if defined(QF_MATH_COVERAGE)
 static qf qf_wrap_bam_units(qf b)
 {
     if (b >= QF_BAM_CYCLE) {
@@ -294,7 +295,6 @@ static qf qf_wrap_bam_units(qf b)
     return b;
 }
 
-#if defined(QF_MATH_COVERAGE)
 /* Coverage/test hook keeps the public old reducer behavior observable. */
 static qf reduce_to_twopi(qf r)
 {
@@ -302,31 +302,22 @@ static qf reduce_to_twopi(qf r)
 }
 #endif
 
-static qf qf_sin_bam_index(uint32_t bam)
-{
-    uint32_t idx  = (bam >> QF_TRIG_FRAC_BITS) & QF_TRIG_CYCLE_MASK;
-    uint32_t frac = bam & QF_TRIG_FRAC_MASK;
-    qf lo = gSIN_TAB[idx];
-    qf hi = gSIN_TAB[(idx + 1u) & QF_TRIG_CYCLE_MASK];
-    return qf_lerp_frac7(lo, hi, frac);
-}
+#define QF_SIN_LOOKUP_FROM_PHASE(out_, phase_)                  \
+    do {                                                        \
+        uint32_t qf_phase_ = (phase_) & QF_BAM_PHASE_MASK;      \
+        uint32_t qf_idx_ =                                  \
+            (qf_phase_ >> QF_TRIG_PHASE_FRAC_BITS) & QF_TRIG_CYCLE_MASK; \
+        uint32_t qf_frac_ = qf_phase_ & QF_TRIG_PHASE_FRAC_MASK; \
+        qf qf_lo_ = gSIN_TAB[qf_idx_++];                        \
+        qf qf_hi_ = gSIN_TAB[qf_idx_];                          \
+        (out_) = qf_lo_ + (qf_hi_ - qf_lo_) *                   \
+                 ((qf)qf_frac_ * QF_TRIG_PHASE_FRAC_SCALE);     \
+    } while (0)
 
-static qf qf_sin_bam_units(qf bam_units)
+static inline qf qf_tan_bam_phase(uint32_t phase)
 {
-    qf t = qf_wrap_bam_units(bam_units) * QF_FRAC7_SCALE;
-    uint32_t idx = (uint32_t)t;
-    qf frac = t - (qf)idx;
-    qf lo = gSIN_TAB[idx & QF_TRIG_CYCLE_MASK];
-    qf hi = gSIN_TAB[(idx + 1u) & QF_TRIG_CYCLE_MASK];
-    return qf_lerp_frac(lo, hi, frac);
-}
-
-static qf qf_tan_bam_units(qf bam_units)
-{
-    qf b = qf_wrap_bam_units(bam_units);
-
-    if (b > 14336.0f && b < 18432.0f) {
-        qf d = b - 16384.0f;
+    if (phase > (14336u << QF_BAM_UNIT_FRAC_BITS) && phase < (18432u << QF_BAM_UNIT_FRAC_BITS)) {
+        qf d = (qf)((int32_t)phase - (int32_t)(16384u << QF_BAM_UNIT_FRAC_BITS)) * QF_INV_BAM_UNIT_SCALE;
         if (d == 0.0f) return QF_TAN_MAX;
         qf ad = (d < 0.0f) ? -d : d;
         qf a = ad * QF_RAD_PER_BAM;
@@ -335,8 +326,8 @@ static qf qf_tan_bam_units(qf bam_units)
         return (d < 0.0f) ? raw : -raw;
     }
 
-    if (b > 47104.0f && b < 51200.0f) {
-        qf d = b - 49152.0f;
+    if (phase > (47104u << QF_BAM_UNIT_FRAC_BITS) && phase < (51200u << QF_BAM_UNIT_FRAC_BITS)) {
+        qf d = (qf)((int32_t)phase - (int32_t)(49152u << QF_BAM_UNIT_FRAC_BITS)) * QF_INV_BAM_UNIT_SCALE;
         if (d == 0.0f) return QF_TAN_MAX;
         qf ad = (d < 0.0f) ? -d : d;
         qf a = ad * QF_RAD_PER_BAM;
@@ -345,12 +336,11 @@ static qf qf_tan_bam_units(qf bam_units)
         return (d < 0.0f) ? raw : -raw;
     }
 
-    qf t = b * QF_FRAC7_SCALE;
-    uint32_t idx = (uint32_t)t;
-    qf frac = t - (qf)idx;
-    qf lo = gTAN_TAB[idx & QF_TRIG_CYCLE_MASK];
-    qf hi = gTAN_TAB[(idx + 1u) & QF_TRIG_CYCLE_MASK];
-    return qf_lerp_frac(lo, hi, frac);
+    uint32_t idx  = (phase >> QF_TRIG_PHASE_FRAC_BITS) & QF_TRIG_CYCLE_MASK;
+    uint32_t frac = phase & QF_TRIG_PHASE_FRAC_MASK;
+    qf lo = gTAN_TAB[idx++];
+    qf hi = gTAN_TAB[idx];
+    return lo + (hi - lo) * ((qf)frac * QF_TRIG_PHASE_FRAC_SCALE);
 }
 
 /*=======================================================
@@ -359,17 +349,21 @@ static qf qf_tan_bam_units(qf bam_units)
 
 qf qf_sin_bam(uint16_t bam)
 {
-    return qf_sin_bam_index((uint32_t)bam);
+    qf out;
+    QF_SIN_LOOKUP_FROM_PHASE(out, (uint32_t)bam << QF_BAM_UNIT_FRAC_BITS);
+    return out;
 }
 
 qf qf_cos_bam(uint16_t bam)
 {
-    return qf_sin_bam_index((uint32_t)bam + 16384u);
+    qf out;
+    QF_SIN_LOOKUP_FROM_PHASE(out, ((uint32_t)bam + 16384u) << QF_BAM_UNIT_FRAC_BITS);
+    return out;
 }
 
 qf qf_tan_bam(uint16_t bam)
 {
-    return qf_tan_bam_units((qf)bam);
+    return qf_tan_bam_phase((uint32_t)bam << QF_BAM_UNIT_FRAC_BITS);
 }
 
 /*=======================================================
@@ -378,17 +372,25 @@ qf qf_tan_bam(uint16_t bam)
 
 qf qf_sin(qf rad)
 {
-    return qf_sin_bam_units(rad * QF_BAM_PER_RAD);
+    qf out;
+    uint32_t phase = (uint32_t)((int32_t)(rad * QF_BAM_PER_RAD * QF_BAM_UNIT_SCALE));
+    QF_SIN_LOOKUP_FROM_PHASE(out, phase);
+    return out;
 }
 
 qf qf_cos(qf rad)
 {
-    return qf_sin_bam_units(rad * QF_BAM_PER_RAD + 16384.0f);
+    qf out;
+    uint32_t phase = (uint32_t)((int32_t)(rad * QF_BAM_PER_RAD * QF_BAM_UNIT_SCALE)) +
+                     (16384u << QF_BAM_UNIT_FRAC_BITS);
+    QF_SIN_LOOKUP_FROM_PHASE(out, phase);
+    return out;
 }
 
 qf qf_tan(qf rad)
 {
-    return qf_tan_bam_units(rad * QF_BAM_PER_RAD);
+    uint32_t phase = (uint32_t)((int32_t)(rad * QF_BAM_PER_RAD * QF_BAM_UNIT_SCALE)) & QF_BAM_PHASE_MASK;
+    return qf_tan_bam_phase(phase);
 }
 
 /*=======================================================
@@ -397,17 +399,25 @@ qf qf_tan(qf rad)
 
 qf qf_sin_deg(qf deg)
 {
-    return qf_sin_bam_units(deg * QF_BAM_PER_DEG);
+    qf out;
+    uint32_t phase = (uint32_t)((int32_t)(deg * QF_BAM_PER_DEG * QF_BAM_UNIT_SCALE));
+    QF_SIN_LOOKUP_FROM_PHASE(out, phase);
+    return out;
 }
 
 qf qf_cos_deg(qf deg)
 {
-    return qf_sin_bam_units(deg * QF_BAM_PER_DEG + 16384.0f);
+    qf out;
+    uint32_t phase = (uint32_t)((int32_t)(deg * QF_BAM_PER_DEG * QF_BAM_UNIT_SCALE)) +
+                     (16384u << QF_BAM_UNIT_FRAC_BITS);
+    QF_SIN_LOOKUP_FROM_PHASE(out, phase);
+    return out;
 }
 
 qf qf_tan_deg(qf deg)
 {
-    return qf_tan_bam_units(deg * QF_BAM_PER_DEG);
+    uint32_t phase = (uint32_t)((int32_t)(deg * QF_BAM_PER_DEG * QF_BAM_UNIT_SCALE)) & QF_BAM_PHASE_MASK;
+    return qf_tan_bam_phase(phase);
 }
 
 /*=======================================================
@@ -558,12 +568,14 @@ qf qf_ln(qf x)
     return r * QF_LN2;
 }
 
+#if !QF_MATH_LEAN_BUILD
 qf qf_log10(qf x)
 {
     qf r = qf_log2(x);
     if (r == QF_DOMAIN_ERROR) return QF_DOMAIN_ERROR;
     return r * QF_LOG10_2;
 }
+#endif
 
 /*=======================================================
  * Exponentials
@@ -596,10 +608,12 @@ qf qf_exp(qf x)
     return qf_pow2(x * QF_LOG2E);
 }
 
+#if !QF_MATH_LEAN_BUILD
 qf qf_pow10(qf x)
 {
     return qf_pow2(x * QF_LOG2_10);
 }
+#endif
 
 /*=======================================================
  * Square root
@@ -701,6 +715,7 @@ qf qf_hypot_fast8(qf x, qf y)
     }
 }
 
+#if !QF_MATH_LEAN_BUILD
 /*=======================================================
  * Wave generators
  *
@@ -844,6 +859,8 @@ qf qf_adsr_step(qf_adsr_t *env)
 
     return env->level;
 }
+
+#endif /* !QF_MATH_LEAN_BUILD */
 
 #if defined(QF_MATH_COVERAGE)
 qf qf_cov_reduce_to_twopi(qf r)

@@ -12,9 +12,10 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#define BENCH_N_ITER    80000
-#define BENCH_N_SAMPLES 8000
-#define BENCH_FR_RX     16
+#define BENCH_N_ITER       8000
+#define BENCH_N_SAMPLES    8000
+#define BENCH_PEER_N_ITER  800
+#define BENCH_FR_RX        16
 
 typedef struct bench_timer {
     void (*init)(void *ctx);
@@ -25,8 +26,21 @@ typedef struct bench_timer {
 
 enum bench_func_idx {
     BENCH_F_SIN = 0,
+    BENCH_F_SIN_DEG,
+    BENCH_F_SIN_BAM,
     BENCH_F_COS,
+    BENCH_F_COS_DEG,
+    BENCH_F_COS_BAM,
+    BENCH_F_TAN,
+    BENCH_F_TAN_DEG,
+    BENCH_F_TAN_BAM,
+    BENCH_F_ASIN,
+    BENCH_F_ACOS,
+    BENCH_F_ATAN,
+    BENCH_F_ATAN2,
     BENCH_F_SQRT,
+    BENCH_F_HYPOT,
+    BENCH_F_HYPOT_FAST,
     BENCH_F_LN,
     BENCH_F_EXP,
     BENCH_NFUNC
@@ -37,26 +51,48 @@ enum bench_lib_idx {
     BENCH_L_LIBM,
     BENCH_L_FX,
     BENCH_L_FR,
-    BENCH_L_POLY,
+    BENCH_L_FASTTRIG,
+    BENCH_L_ESPDSP,
+    BENCH_L_ESPP,
     BENCH_NLIB
 };
 
 /**
- * acc_pct[func][col]: columns qf, fx, fr, internal poly — sin/cos = max abs
- * err ×100; sqrt/ln/exp = max relative err ×100. Unused entries are NAN.
- * time_us[func][lib]: microseconds for the full timed loop (same shape as host suite).
+ * acc[func][lib]: max error in the metric named by bench_func_metric(func).
+ * time_us[func][lib]: microseconds for the timed loop. Unsupported entries are NAN.
  */
 typedef struct bench_results {
-    double acc_pct[BENCH_NFUNC][4];
+    double acc[BENCH_NFUNC][BENCH_NLIB];
     double time_us[BENCH_NFUNC][BENCH_NLIB];
 } bench_results_t;
 
+typedef float (*bench_unary_fn_t)(float);
+typedef float (*bench_binary_fn_t)(float, float);
+
 void bench_results_init(bench_results_t *r);
 
-/** Run sin, cos, sqrt, ln, exp benchmarks (same grids & iteration counts as host compare/). */
+/** Run the portable qf_math/libm/libfixmath/fr_math matrix. */
 void bench_run_all(const bench_timer_t *timer, volatile float *sink, bench_results_t *out);
 
+/** Fill one optional unary or binary peer cell using the shared grids/metrics. */
+void bench_run_unary_peer(const bench_timer_t *timer,
+                          volatile float *sink,
+                          bench_results_t *out,
+                          int lib_idx,
+                          int func_idx,
+                          bench_unary_fn_t fn);
+void bench_run_binary_peer(const bench_timer_t *timer,
+                           volatile float *sink,
+                           bench_results_t *out,
+                           int lib_idx,
+                           int func_idx,
+                           bench_binary_fn_t fn);
+
 double bench_ratio_vs_libm(double us_libm, double us_impl);
+
+const char *bench_func_name(int func_idx);
+const char *bench_func_metric(int func_idx);
+const char *bench_lib_name(int lib_idx);
 
 /** Human-readable report to stdout (UART on ESP-IDF). */
 void bench_print_human(const bench_results_t *r);

@@ -195,6 +195,7 @@ def main() -> int:
             if not port_after_reset:
                 raise RuntimeError("serial port did not reappear after upload/reset")
             port = port_after_reset
+            time.sleep(2.0)
 
         body = capture_markdown(port, args.timeout)
         # Sanity: expect markdown tables

@@ -2,7 +2,7 @@
 
 Target board: **[LilyGO T-Display-S3](https://www.lilygo.cc/products/t-display-s3)** — ESP32-S3, 16 MB flash, ST7789 TFT (this sketch **does not** drive the display; output is **Serial @ 115200**).
 
-Same portable workload as **[`compare/benchmark_core.c`](../../compare/benchmark_core.c)** / **`make compare`** (qf_math, newlib `sinf`/`…`, libfixmath + fr_math via float bridges), plus an ESP32-S3-only fast-math peer section for **FastTrig**, **ESP-DSP** sqrt, and **espp/math** scalar helpers.
+Same portable workload as **[`compare/benchmark_core.c`](../../compare/benchmark_core.c)** / **`make compare`** (qf_math, newlib `sinf`/`…`, libfixmath + fr_math via float bridges), plus ESP32-S3-only fast-math peer sections for **FastTrig**, **ESP-DSP** sqrt, **espp/math** scalar helpers, and inverse trig (`asin`, `acos`, `atan`, `atan2`) where the float-domain peer exposes those functions.
 
 From repo root, **`make mcu-benchmark-snapshot`** (needs **pyserial**, **pio**, USB) flashes this sketch and overwrites **[`compare/MCU_BENCHMARK_SNAPSHOT.md`](../../compare/MCU_BENCHMARK_SNAPSHOT.md)** (~many minutes — full compare loops).
 

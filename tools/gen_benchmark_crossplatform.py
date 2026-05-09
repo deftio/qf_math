@@ -15,11 +15,34 @@ HOST_MD = ROOT / "compare" / "BENCHMARK_REPORT.md"
 MCU_MD = ROOT / "compare" / "MCU_BENCHMARK_SNAPSHOT.md"
 OUT_MD = ROOT / "compare" / "BENCHMARK_CROSSPLATFORM.md"
 
-FUNCS = ["sin", "cos", "sqrt", "ln", "exp"]
+FUNCS = [
+    "sin_rad",
+    "sin_deg",
+    "sin_bam",
+    "cos_rad",
+    "cos_deg",
+    "cos_bam",
+    "tan_rad",
+    "tan_deg",
+    "tan_bam",
+    "asin",
+    "acos",
+    "atan",
+    "atan2",
+    "sqrt",
+    "hypot",
+    "hypot_fast",
+    "ln",
+    "exp",
+]
 LIBS_DISPLAY = [
+    ("libm", "libm"),
     ("qf_math", "**qf_math**"),
     ("libfixmath", "**libfixmath** (float bridge)"),
     ("fr_math", "**fr_math** (float bridge)"),
+    ("FastTrig", "**FastTrig**"),
+    ("ESP-DSP", "**ESP-DSP**"),
+    ("espp/math", "**espp/math**"),
 ]
 
 
@@ -44,8 +67,8 @@ def extract_device_line(md: str) -> str:
     return "ESP32-class MCU (see MCU snapshot)"
 
 
-def extract_speed_ratio_table(md: str) -> dict[str, list[str]]:
-    """Rows from the portable Speed vs libm section only (not wall-clock us or extra MCU peers)."""
+def extract_speed_ratio_table(md: str) -> dict[str, dict[str, str]]:
+    """Parse the generated function-row Speed vs libm matrix."""
     lines = md.splitlines()
     sec = None
     for i, line in enumerate(lines):
@@ -57,26 +80,25 @@ def extract_speed_ratio_table(md: str) -> dict[str, list[str]]:
 
     start = None
     for i in range(sec, len(lines)):
-        if lines[i].strip().startswith("| Library | sin |"):
+        if lines[i].strip().startswith("| Function |"):
             start = i
             break
     if start is None:
-        raise ValueError("| Library | sin | ratio table not found after Speed vs libm")
+        raise ValueError("| Function | ratio table not found after Speed vs libm")
 
-    rows: dict[str, list[str]] = {}
+    header = [p.strip() for p in lines[start].split("|")[1:-1]]
+    libs = [normalize_key(h) for h in header[1:]]
+    rows: dict[str, dict[str, str]] = {lib: {} for lib in libs}
     for line in lines[start + 2 :]:
         line = line.strip()
         if not line.startswith("|"):
             break
         parts = [p.strip() for p in line.split("|")[1:-1]]
-        if len(parts) < 6:
+        if len(parts) < len(header):
             continue
-        key_raw = parts[0]
-        key = re.sub(r"\*+", "", key_raw).strip()
-        key = key.replace("`", "").strip()
-        if key.startswith("libm"):
-            continue
-        rows[key] = parts[1:6]
+        fn = parts[0].replace("`", "").strip()
+        for lib, cell in zip(libs, parts[1:]):
+            rows.setdefault(lib, {})[fn] = cell
     return rows
 
 
@@ -88,22 +110,27 @@ def normalize_key(key: str) -> str:
         return "libfixmath"
     if "fr_math" in k or "fr math" in k:
         return "fr_math"
-    if "taylor" in k:
-        return "Taylor poly"
+    if "fasttrig" in k:
+        return "FastTrig"
+    if "esp-dsp" in k:
+        return "ESP-DSP"
+    if "espp" in k:
+        return "espp/math"
+    if k == "libm":
+        return "libm"
     return key
 
 
-def normalize_table(raw: dict[str, list[str]]) -> dict[str, list[str]]:
-    out: dict[str, list[str]] = {}
-    for k, v in raw.items():
-        nk = normalize_key(k)
-        out[nk] = [format_fixed6_cell(cell) for cell in v]
+def normalize_table(raw: dict[str, dict[str, str]]) -> dict[str, dict[str, str]]:
+    out: dict[str, dict[str, str]] = {}
+    for k, row in raw.items():
+        out[k] = {fn: format_fixed6_cell(cell) for fn, cell in row.items()}
     return out
 
 
 def format_fixed6_cell(cell: str) -> str:
-    if cell.strip() == "—":
-        return "—"
+    if cell.strip() in {"—", "---"}:
+        return "---"
     try:
         value = float(cell)
     except ValueError:
@@ -184,14 +211,8 @@ def main() -> int:
         "but are not native `fix16_t` / `s32` pipeline timing."
     )
     buf.append(
-        "- **ESP32-S3-only peers** such as FastTrig, ESP-DSP sqrt, and espp/math are captured in "
-        "[`MCU_BENCHMARK_SNAPSHOT.md`](MCU_BENCHMARK_SNAPSHOT.md). This cross-platform report "
-        "only merges rows shared by the portable host and MCU harnesses."
-    )
-    buf.append(
-        "- **Coverage is intentionally narrow today:** this file only merges the timed `sin`, `cos`, "
-        "`sqrt`, `ln`, and `exp` rows. Accuracy for `tan`, inverse trig, `log2`, `log10`, `pow2`, "
-        "`pow10`, `hypot`, and wave/envelope helpers still needs a separate generated coverage table."
+        "- Unsupported cells are shown as `---`. Some ESP32-only peers do not run on the POSIX host "
+        "benchmark, and some libraries do not provide scalar implementations for every function."
     )
     buf.append("")
     buf.append("All ratios are shown with six digits after the decimal point.")
@@ -206,10 +227,10 @@ def main() -> int:
         buf.append("| :--- | ---:| ---:|")
         hr = host_tbl.get(lib_key)
         mr = mcu_tbl.get(lib_key)
-        for i, fn in enumerate(FUNCS):
-            hc = hr[i] if hr and i < len(hr) else "—"
-            mc = mr[i] if mr and i < len(mr) else "—"
-            if hc.strip() == "—" and mc.strip() == "—":
+        for fn in FUNCS:
+            hc = hr.get(fn, "---") if hr else "---"
+            mc = mr.get(fn, "---") if mr else "---"
+            if hc.strip() == "---" and mc.strip() == "---":
                 continue
             buf.append(f"| `{fn}` | {hc} | {mc} |")
         buf.append("")
