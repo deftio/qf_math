@@ -1,0 +1,98 @@
+#######################################
+# Syntax coloring for qf_math library
+# (Arduino IDE)
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+qf	KEYWORD1
+qf_adsr_t	KEYWORD1
+
+#######################################
+# Functions (KEYWORD2)
+#######################################
+qf_sin_bam	KEYWORD2
+qf_cos_bam	KEYWORD2
+qf_tan_bam	KEYWORD2
+qf_sin	KEYWORD2
+qf_cos	KEYWORD2
+qf_tan	KEYWORD2
+qf_sin_deg	KEYWORD2
+qf_cos_deg	KEYWORD2
+qf_tan_deg	KEYWORD2
+qf_acos	KEYWORD2
+qf_asin	KEYWORD2
+qf_atan	KEYWORD2
+qf_atan2	KEYWORD2
+qf_log2	KEYWORD2
+qf_ln	KEYWORD2
+qf_log10	KEYWORD2
+qf_pow2	KEYWORD2
+qf_exp	KEYWORD2
+qf_pow	KEYWORD2
+qf_pow10	KEYWORD2
+qf_sqrt	KEYWORD2
+qf_hypot	KEYWORD2
+qf_hypot_fast2	KEYWORD2
+qf_hypot_fast8	KEYWORD2
+qf_wave_sqr	KEYWORD2
+qf_wave_pwm	KEYWORD2
+qf_wave_tri	KEYWORD2
+qf_wave_saw	KEYWORD2
+qf_wave_tri_morph	KEYWORD2
+qf_wave_noise	KEYWORD2
+qf_adsr_init	KEYWORD2
+qf_adsr_trigger	KEYWORD2
+qf_adsr_release	KEYWORD2
+qf_adsr_step	KEYWORD2
+
+#######################################
+# Macros / Constants (LITERAL1)
+#######################################
+QF_MATH_VERSION	LITERAL1
+QF_MATH_VERSION_HEX	LITERAL1
+QF_TO_FR	LITERAL1
+QF_TO_FR_RND	LITERAL1
+FR_TO_QF	LITERAL1
+QF_FROM_INT	LITERAL1
+QF_TO_INT	LITERAL1
+QF_ROUND	LITERAL1
+QF_ABS	LITERAL1
+QF_SGN	LITERAL1
+QF_MIN	LITERAL1
+QF_MAX	LITERAL1
+QF_CLAMP	LITERAL1
+QF_INTERP	LITERAL1
+QF_PI	LITERAL1
+QF_TWO_PI	LITERAL1
+QF_HALF_PI	LITERAL1
+QF_E	LITERAL1
+QF_INV_E	LITERAL1
+QF_INV_PI	LITERAL1
+QF_DEG2RAD_K	LITERAL1
+QF_RAD2DEG_K	LITERAL1
+QF_LOG2E	LITERAL1
+QF_LN2	LITERAL1
+QF_LOG2_10	LITERAL1
+QF_LOG10_2	LITERAL1
+QF_SQRT2	LITERAL1
+QF_INV_SQRT2	LITERAL1
+QF_SQRT3	LITERAL1
+QF_INV_SQRT3	LITERAL1
+QF_SQRT5	LITERAL1
+QF_SQRT10	LITERAL1
+QF_DEG_TO_RAD	LITERAL1
+QF_RAD_TO_DEG	LITERAL1
+QF_BAM_TO_RAD	LITERAL1
+QF_RAD_TO_BAM	LITERAL1
+QF_BAM_TO_DEG	LITERAL1
+QF_DEG_TO_BAM	LITERAL1
+QF_DOMAIN_ERROR	LITERAL1
+QF_TAN_MAX	LITERAL1
+QF_HZ2BAM_INC	LITERAL1
+QF_ADSR_IDLE	LITERAL1
+QF_ADSR_ATTACK	LITERAL1
+QF_ADSR_DECAY	LITERAL1
+QF_ADSR_SUSTAIN	LITERAL1
+QF_ADSR_RELEASE	LITERAL1
