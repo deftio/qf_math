@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Flash examples/lilygo_t_display_s3_bench and rewrite compare/MCU_BENCHMARK_SNAPSHOT.md
+Flash examples/lilygo_t_display_s3_bench and rewrite compare/MCU_BENCHMARK_SNAPSHOT_ESP32S3.md
 from UART output between DOC_TABLE markers.
 
 Requires: PlatformIO (pio), pyserial, compare deps (make compare-deps).
@@ -116,27 +116,28 @@ def capture_markdown(port: str, timeout_sec: float) -> str:
 
 DOC_HEADER = """# MCU benchmark snapshot
 
-_Generated:_ **{timestamp}** (`tools/mcu_benchmark_snapshot.py` — LilyGO / ESP32-S3 Arduino bench).
+_Generated:_ **{timestamp}** (`tools/mcu_benchmark_snapshot.py` — {label}).
 
-Tables match [`BENCHMARK_REPORT.md`](BENCHMARK_REPORT.md) sections (accuracy %, wall-clock microseconds, speed vs libm). Loop shape and grids match host **`make compare`** (`benchmark_core.c`). MCU timing uses **`esp_timer_get_time()`**.
+Tables match [`BENCHMARK_REPORT.md`](BENCHMARK_REPORT.md) sections (accuracy %, wall-clock microseconds, speed vs libm). Loop shape and grids match host **`make compare`** (`benchmark_core.c`). MCU timing uses **{timer}**.
 
-Firmware: [`examples/lilygo_t_display_s3_bench/`](../examples/lilygo_t_display_s3_bench/README.md).
+Firmware: [`{project}/`](../{project}/).
 
 Regenerate:
 
 ```bash
 make compare-deps
+# ESP32-S3 default:
 make mcu-benchmark-snapshot
-# or: MCU_SERIAL_PORT=/dev/cu.usbmodem2101 python3 tools/mcu_benchmark_snapshot.py
+# Other boards: pass --project, --label, --timer, and --out explicitly.
 ```
 
 ---
 """
 
 
-def write_snapshot(out_path: Path, body_md: str) -> None:
+def write_snapshot(out_path: Path, body_md: str, label: str, project: str, timer: str) -> None:
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%SZ")
-    text = DOC_HEADER.format(timestamp=ts) + "\n" + body_md.rstrip() + "\n"
+    text = DOC_HEADER.format(timestamp=ts, label=label, project=project, timer=timer) + "\n" + body_md.rstrip() + "\n"
     out_path.write_text(text, encoding="utf-8")
     print(f"wrote {out_path}", flush=True)
 
@@ -148,10 +149,20 @@ def main() -> int:
         default="examples/lilygo_t_display_s3_bench",
         help="PlatformIO project directory",
     )
+    ap.add_argument(
+        "--label",
+        default="LilyGO / ESP32-S3 Arduino bench",
+        help="Human-readable platform label for the generated header",
+    )
+    ap.add_argument(
+        "--timer",
+        default="`esp_timer_get_time()`",
+        help="Human-readable timer source for the generated header",
+    )
     ap.add_argument("--port", default=None, help="Serial device (default: guess or MCU_SERIAL_PORT)")
     ap.add_argument(
         "--out",
-        default="compare/MCU_BENCHMARK_SNAPSHOT.md",
+        default="compare/MCU_BENCHMARK_SNAPSHOT_ESP32S3.md",
         help="Output Markdown path (repo-relative)",
     )
     ap.add_argument(
@@ -202,7 +213,7 @@ def main() -> int:
         if "### MCU benchmark snapshot" not in body and "### Accuracy" not in body:
             print("warning: unexpected capture payload (missing expected headings)", file=sys.stderr)
 
-        write_snapshot(out, body)
+        write_snapshot(out, body, args.label, args.project, args.timer)
     except subprocess.CalledProcessError as e:
         print(f"upload failed (exit {e.returncode})", file=sys.stderr)
         return e.returncode or 1

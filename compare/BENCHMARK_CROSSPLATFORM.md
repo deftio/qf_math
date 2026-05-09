@@ -1,63 +1,184 @@
-# Benchmark — host vs MCU (relative)
+# Benchmark — host vs ESP32-S3 (combined tables)
 
-Side‑by‑side **`libm` ÷ implementation** ratios from the same benchmark loops ([`benchmark_core.c`](benchmark_core.c)). **Values above 1.0** mean that row beat **`sinf`/`cosf`/…** on that platform for the timed loop; **below 1.0** means slower than libm.
+Side-by-side **POSIX host** ([`BENCHMARK_REPORT.md`](BENCHMARK_REPORT.md)) and **ESP32-S3 MCU** ([`MCU_BENCHMARK_SNAPSHOT_ESP32S3.md`](MCU_BENCHMARK_SNAPSHOT_ESP32S3.md)) for the same [`benchmark_core.c`](benchmark_core.c) loops. Each library has **two columns**: **(host)** then **(ESP32-S3)**.
 
-## Where the numbers live
+## Sources & timestamps
 
-| Platform | Role | Source file | Regenerate |
-|----------|------|-------------|------------|
-| **POSIX host** | Apple **Darwin** arm64, desktop libm reference | [`BENCHMARK_REPORT.md`](BENCHMARK_REPORT.md) | **`make compare-github-report`** |
-| **MCU** | On‑silicon (below) | [`MCU_BENCHMARK_SNAPSHOT.md`](MCU_BENCHMARK_SNAPSHOT.md) | **`make mcu-benchmark-snapshot`** (USB + `pio` + `pyserial`) |
-| **Combined relative tables** | Host vs MCU ratios only | This file | **`make benchmark-crossplatform`** (or `python3 tools/gen_benchmark_crossplatform.py`) |
+| | |
+|-|-|
+| **Host** | UTC **`2026-05-09 08:43:47Z`** — `make compare-github-report` |
+| **ESP32-S3** | **`2026-05-09 05:35:25Z`** · LilyGO T-Display-S3 · Arduino-ESP32 · esp_chip model=9 cores=2 revision=0 — `make mcu-benchmark-snapshot` |
 
-### Snapshot timestamps (committed)
-
-| Host (`BENCHMARK_REPORT`) | UTC **`2026-05-08 16:03:16Z`** |
-| MCU (`MCU_BENCHMARK_SNAPSHOT`) | **`2026-05-08 07:27:38Z`** · LilyGO T-Display-S3 · Arduino-ESP32 · esp_chip model=9 cores=2 revision=0 |
-
-> **Chip note:** the checked‑in MCU row is **Espressif ESP32‑S3** (**LilyGO T‑Display‑S3**, Arduino core). **ESP32‑S2** is a different core; to add S2 numbers, port/run the same benchmark and regenerate [`MCU_BENCHMARK_SNAPSHOT.md`](MCU_BENCHMARK_SNAPSHOT.md), then re-run this script.
+> **Do not compare absolute microseconds** across host vs ESP32-S3. **Speed vs libm** ratios (`libm` time ÷ implementation time) are comparable *within* each column; > 1.0 means faster than that platform’s `sinf`/`sqrtf`/… for that loop.
 
 ## Interpretation
 
-- **Do not compare absolute microseconds** across columns — host vs MCU clocks and libc builds differ wildly.
-- **Ratios vs libm** are useful *within each column*: they show whether each measured row beats the platform’s **`sinf`** / **`sqrtf`** / … **on that silicon**.
-- **libfixmath** / **fr_math** rows are **bridged harness timings**: `float`→fixed→function→`float`. They are included for comparison continuity, but are not native `fix16_t` / `s32` pipeline timing.
-- **fr_math** is the current automated `s32` fixed-radix comparison. Other fast libraries such as CMSIS-DSP, ArmMathM0, Qfplib, and FastTrig are tracked in [`PEERS.md`](PEERS.md), but are not wired into this reproducible ESP32-S3/host harness yet.
-- **Coverage is intentionally narrow today:** this file only merges the timed `sin`, `cos`, `sqrt`, `ln`, and `exp` rows. Accuracy for `tan`, inverse trig, `log2`, `log10`, `pow2`, `pow10`, `hypot`, and wave/envelope helpers still needs a separate generated coverage table.
+- **libfixmath** / **fr_math** use **float bridges** in these tables (host and MCU harness); native `fix16_t` / radix `s32` calls are usually faster.
+- **ESP32-only** peers (**FastTrig**, **ESP-DSP**, **espp/math**) have `---` in **(host)** columns when the POSIX bench does not build that implementation.
+- `---` means the row was unsupported or not present in the captured ESP32-S3 snapshot. Refresh `MCU_BENCHMARK_SNAPSHOT_ESP32S3.md` after changing the shared benchmark row set.
 
-All ratios are shown with six digits after the decimal point.
+Numeric formatting matches the snapshots (six digits after the decimal where applicable). Unsupported cells: `---`.
 
-## Speed vs libm — Host | MCU
+### Accuracy
 
-### qf_math
+Same metric meanings as the snapshots: `abs %FS`, `abs`, `abs rad`, `rel %` as in the `Metric` column.
 
-| Function | Host ratio | MCU ratio |
-| :--- | ---:| ---:|
-| `sin` | 0.829154 | 1.279325 |
-| `cos` | 0.766901 | 1.326615 |
-| `sqrt` | 0.385030 | 1.085715 |
-| `ln` | 1.011569 | 2.189942 |
-| `exp` | 0.764458 | 2.584402 |
+| Function | Metric | libm (host) | libm (ESP32-S3) | qf_math (host) | qf_math (ESP32-S3) | libfixmath (host) | libfixmath (ESP32-S3) | fr_math (host) | fr_math (ESP32-S3) | FastTrig (host) | FastTrig (ESP32-S3) | ESP-DSP (host) | ESP-DSP (ESP32-S3) | espp/math (host) | espp/math (ESP32-S3) |
+| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `sin_rad` | abs %FS | 0.000000 | 0.000000 | 0.001884 | 0.001884 | 0.775155 | 0.775155 | 0.007801 | 0.007801 | --- | 0.015257 | --- | --- | --- | 0.388743 |
+| `sin_deg` | abs %FS | 0.000000 | 0.000000 | 0.001883 | 0.001883 | 0.775144 | 0.775144 | 0.006335 | 0.006335 | --- | 0.015247 | --- | --- | --- | 0.388747 |
+| `sin_bam` | abs %FS | 0.000000 | 0.000000 | 0.001885 | 0.001885 | 0.775155 | 0.775155 | 0.004341 | 0.004341 | --- | 0.014338 | --- | --- | --- | 0.393073 |
+| `cos_rad` | abs %FS | 0.000000 | 0.000000 | 0.001886 | 0.001886 | 0.775151 | 0.775151 | 0.008672 | 0.008672 | --- | 0.015248 | --- | --- | --- | 0.388739 |
+| `cos_deg` | abs %FS | 0.000000 | 0.000000 | 0.001883 | 0.001883 | 0.775150 | 0.775150 | 0.006432 | 0.006432 | --- | 0.015250 | --- | --- | --- | 0.388746 |
+| `cos_bam` | abs %FS | 0.000000 | 0.000000 | 0.001885 | 0.001885 | 0.775151 | 0.775151 | 0.004342 | 0.004342 | --- | 0.015656 | --- | --- | --- | 0.393077 |
+| `tan_rad` | abs | 0.000000 | 0.000000 | 0.300599 | 0.300599 | 20.376813 | 20.376813 | 0.051472 | 0.051472 | --- | 0.744179 | --- | --- | --- | --- |
+| `tan_deg` | abs | 0.000000 | 0.000000 | 0.037535 | 0.037535 | 20.376813 | 20.376813 | 1.007205 | 1.007205 | --- | 0.751325 | --- | --- | --- | --- |
+| `tan_bam` | abs | 0.000000 | 0.000000 | 0.222870 | 0.222870 | 20.325424 | 20.325424 | 2.452361 | 2.452361 | --- | 1.442062 | --- | --- | --- | --- |
+| `asin` | abs rad | 0.000000 | 0.000000 | 0.000466 | 0.000231 | 0.010209 | 0.010209 | 0.000361 | 0.000361 | --- | 0.002611 | --- | --- | --- | --- |
+| `acos` | abs rad | 0.000000 | 0.000000 | 0.000466 | 0.000232 | 0.010220 | 0.010220 | 0.000357 | 0.000357 | --- | 0.002611 | --- | --- | --- | --- |
+| `atan` | abs rad | 0.000000 | 0.000000 | 0.000013 | 0.000190 | 0.010158 | 0.010158 | 0.000950 | 0.000950 | --- | 0.000609 | --- | --- | --- | --- |
+| `atan2` | abs rad | 0.000000 | 0.000000 | 0.001287 | 0.000000 | 0.010172 | 0.000013 | 0.000944 | 0.000314 | --- | 0.000608 | --- | --- | --- | --- |
+| `sqrt` | rel % | 0.000000 | 0.000000 | 0.000472 | 0.000472 | 0.380124 | 0.380124 | 1.189381 | 1.189381 | --- | --- | --- | 3.515928 | --- | 0.175208 |
+| `hypot` | rel % | 0.000000 | 0.000000 | 0.000470 | 0.000470 | --- | --- | 0.000007 | 0.000007 | --- | --- | --- | --- | --- | --- |
+| `hypot_fast2` | rel % | 0.000000 | 0.000000 | 1.408747 | 1.408747 | --- | --- | --- | --- | --- | 2.633407 | --- | --- | --- | --- |
+| `hypot_fast` | rel % | 0.000000 | 0.000000 | 0.137249 | 0.137249 | --- | --- | 0.137249 | 0.137249 | --- | --- | --- | --- | --- | --- |
+| `log2` | rel % | 0.000000 | --- | 0.001625 | --- | 0.280398 | --- | 0.316523 | --- | --- | --- | --- | --- | --- | --- |
+| `ln` | rel % | 0.000000 | 0.000000 | 0.001626 | 0.271975 | 0.086993 | 0.086993 | 0.398790 | 0.398790 | --- | --- | --- | --- | --- | 6.536268 |
+| `log10` | rel % | 0.000000 | --- | 0.001632 | --- | 0.511634 | --- | 0.511634 | --- | --- | --- | --- | --- | --- | --- |
+| `pow2` | rel % | 0.000000 | --- | 0.000327 | --- | 0.047725 | --- | 0.092220 | --- | --- | --- | --- | --- | --- | --- |
+| `exp` | rel % | 0.000000 | 0.000000 | 0.000344 | 0.001504 | 0.286388 | 0.286388 | 0.574226 | 0.574226 | --- | --- | --- | --- | --- | --- |
+| `pow10` | rel % | 0.000000 | --- | 0.000371 | --- | 303710.475412 | --- | 199.601630 | --- | --- | --- | --- | --- | --- | --- |
+| `pow` | rel % | 0.000000 | --- | 0.000379 | --- | 0.045078 | --- | 0.086622 | --- | --- | --- | --- | --- | --- | --- |
 
-### libfixmath (float bridge)
+### Accuracy — mean squared error
 
-| Function | Host ratio | MCU ratio |
-| :--- | ---:| ---:|
-| `sin` | 0.218819 | 0.825742 |
-| `cos` | 0.197968 | 0.793324 |
-| `sqrt` | 0.028398 | 0.236298 |
-| `ln` | 0.003611 | 0.013298 |
-| `exp` | 0.011844 | 0.059141 |
+MSE uses the same metric units as the peak-error table, squared.
 
-### fr_math (float bridge)
+| Function | Metric | libm (host) | libm (ESP32-S3) | qf_math (host) | qf_math (ESP32-S3) | libfixmath (host) | libfixmath (ESP32-S3) | fr_math (host) | fr_math (ESP32-S3) | FastTrig (host) | FastTrig (ESP32-S3) | ESP-DSP (host) | ESP-DSP (ESP32-S3) | espp/math (host) | espp/math (ESP32-S3) |
+| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `sin_rad` | abs %FS^2 | 0.000000 | 0.000000 | 0.000001 | 0.000001 | 0.022074 | 0.022074 | 0.000006 | 0.000006 | --- | 0.000016 | --- | --- | --- | 0.025967 |
+| `sin_deg` | abs %FS^2 | 0.000000 | 0.000000 | 0.000001 | 0.000001 | 0.022074 | 0.022074 | 0.000005 | 0.000005 | --- | 0.000016 | --- | --- | --- | 0.025968 |
+| `sin_bam` | abs %FS^2 | 0.000000 | 0.000000 | 0.000001 | 0.000001 | 0.022069 | 0.022069 | 0.000002 | 0.000002 | --- | 0.000016 | --- | --- | --- | 0.025969 |
+| `cos_rad` | abs %FS^2 | 0.000000 | 0.000000 | 0.000001 | 0.000001 | 0.022133 | 0.022133 | 0.000006 | 0.000006 | --- | 0.000014 | --- | --- | --- | 0.025967 |
+| `cos_deg` | abs %FS^2 | 0.000000 | 0.000000 | 0.000001 | 0.000001 | 0.022132 | 0.022132 | 0.000006 | 0.000006 | --- | 0.000013 | --- | --- | --- | 0.025968 |
+| `cos_bam` | abs %FS^2 | 0.000000 | 0.000000 | 0.000001 | 0.000001 | 0.022094 | 0.022094 | 0.000002 | 0.000002 | --- | 0.000010 | --- | --- | --- | 0.025969 |
+| `tan_rad` | abs^2 | 0.000000 | 0.000000 | 0.000027 | 0.000027 | 0.753949 | 0.753949 | 0.000008 | 0.000008 | --- | 0.000849 | --- | --- | --- | --- |
+| `tan_deg` | abs^2 | 0.000000 | 0.000000 | 0.000001 | 0.000001 | 0.753950 | 0.753950 | 0.001127 | 0.001127 | --- | 0.000845 | --- | --- | --- | --- |
+| `tan_bam` | abs^2 | 0.000000 | 0.000000 | 0.000013 | 0.000013 | 0.704843 | 0.704843 | 0.004254 | 0.004254 | --- | 0.001584 | --- | --- | --- | --- |
+| `asin` | abs rad^2 | 0.000000 | 0.000000 | 0.000000 | 0.000000 | 0.000023 | 0.000023 | 0.000000 | 0.000000 | --- | 0.000000 | --- | --- | --- | --- |
+| `acos` | abs rad^2 | 0.000000 | 0.000000 | 0.000000 | 0.000000 | 0.000023 | 0.000023 | 0.000000 | 0.000000 | --- | 0.000000 | --- | --- | --- | --- |
+| `atan` | abs rad^2 | 0.000000 | 0.000000 | 0.000000 | 0.000000 | 0.000047 | 0.000047 | 0.000000 | 0.000000 | --- | 0.000000 | --- | --- | --- | --- |
+| `atan2` | abs rad^2 | 0.000000 | 0.000000 | 0.000000 | 0.000000 | 0.000021 | 0.000000 | 0.000000 | 0.000000 | --- | 0.000000 | --- | --- | --- | --- |
+| `sqrt` | rel %^2 | 0.000000 | 0.000000 | 0.000000 | 0.000000 | 0.000018 | 0.000018 | 0.000177 | 0.000177 | --- | --- | --- | 3.841045 | --- | 0.012125 |
+| `hypot` | rel %^2 | 0.000000 | 0.000000 | 0.000000 | 0.000000 | --- | --- | 0.000000 | 0.000000 | --- | --- | --- | --- | --- | --- |
+| `hypot_fast2` | rel %^2 | 0.000000 | 0.000000 | 0.519433 | 0.519433 | --- | --- | --- | --- | --- | 3.021117 | --- | --- | --- | --- |
+| `hypot_fast` | rel %^2 | 0.000000 | 0.000000 | 0.003018 | 0.003018 | --- | --- | 0.003018 | 0.003018 | --- | --- | --- | --- | --- | --- |
+| `log2` | rel %^2 | 0.000000 | --- | 0.000000 | --- | 0.000011 | --- | 0.000033 | --- | --- | --- | --- | --- | --- | --- |
+| `ln` | rel %^2 | 0.000000 | 0.000000 | 0.000000 | 0.000016 | 0.000001 | 0.000001 | 0.000043 | 0.000043 | --- | --- | --- | --- | --- | 0.006856 |
+| `log10` | rel %^2 | 0.000000 | --- | 0.000000 | --- | 0.000040 | --- | 0.000048 | --- | --- | --- | --- | --- | --- | --- |
+| `pow2` | rel %^2 | 0.000000 | --- | 0.000000 | --- | 0.000048 | --- | 0.000174 | --- | --- | --- | --- | --- | --- | --- |
+| `exp` | rel %^2 | 0.000000 | 0.000000 | 0.000000 | 0.000001 | 0.001315 | 0.001315 | 0.005274 | 0.005274 | --- | --- | --- | --- | --- | --- |
+| `pow10` | rel %^2 | 0.000000 | --- | 0.000000 | --- | 12147284.785276 | --- | 2538.590406 | --- | --- | --- | --- | --- | --- | --- |
+| `pow` | rel %^2 | 0.000000 | --- | 0.000000 | --- | 0.000103 | --- | 0.000338 | --- | --- | --- | --- | --- | --- | --- |
 
-| Function | Host ratio | MCU ratio |
-| :--- | ---:| ---:|
-| `sin` | 0.424497 | 1.303300 |
-| `cos` | 0.250598 | 0.907742 |
-| `sqrt` | 0.033255 | 0.085982 |
-| `ln` | 0.316133 | 0.921046 |
-| `exp` | 0.512173 | 1.869562 |
+### Wall-clock time (microseconds)
+
+Total microseconds for the benchmark loop on each platform (normalized loop shape per snapshot metadata).
+
+| Function | libm (host) | libm (ESP32-S3) | qf_math (host) | qf_math (ESP32-S3) | libfixmath (host) | libfixmath (ESP32-S3) | fr_math (host) | fr_math (ESP32-S3) | FastTrig (host) | FastTrig (ESP32-S3) | ESP-DSP (host) | ESP-DSP (ESP32-S3) | espp/math (host) | espp/math (ESP32-S3) |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `sin_rad` | 3298.791667 | 500037.000000 | 1587.625000 | 116170.000000 | 9329.541667 | 640541.000000 | 4035.625000 | 378932.000000 | --- | 240620.000000 | --- | --- | --- | 258240.000000 |
+| `sin_deg` | 1194.333333 | 541014.000000 | 585.000000 | 120533.000000 | 7431.416667 | 677248.000000 | 4264.666667 | 400972.000000 | --- | 223400.000000 | --- | --- | --- | 294650.000000 |
+| `sin_bam` | 1511.500000 | 265359.000000 | 949.750000 | 129125.000000 | 9512.125000 | 683756.000000 | 1514.541667 | 160908.000000 | --- | 249040.000000 | --- | --- | --- | 264580.000000 |
+| `cos_rad` | 1522.333333 | 500122.000000 | 691.333333 | 114016.000000 | 7079.791667 | 657978.000000 | 5429.458333 | 553675.000000 | --- | 292110.000000 | --- | --- | --- | 324820.000000 |
+| `cos_deg` | 1295.041667 | 545270.000000 | 749.458333 | 122681.000000 | 7214.625000 | 703302.000000 | 4334.541667 | 485308.000000 | --- | 275000.000000 | --- | --- | --- | 361330.000000 |
+| `cos_bam` | 1251.125000 | 301254.000000 | 715.458333 | 129126.000000 | 7263.833333 | 709637.000000 | 1318.875000 | 194816.000000 | --- | 281330.000000 | --- | --- | --- | 331190.000000 |
+| `tan_rad` | 1468.541667 | 635623.000000 | 854.333333 | 178588.000000 | 13461.500000 | 1510331.000000 | 4385.791667 | 485865.000000 | --- | 414390.000000 | --- | --- | --- | --- |
+| `tan_deg` | 1482.250000 | 652780.000000 | 835.541667 | 178587.000000 | 14203.250000 | 1546832.000000 | 11779.041667 | 518516.000000 | --- | 397230.000000 | --- | --- | --- | --- |
+| `tan_bam` | 1426.000000 | 409371.000000 | 1069.125000 | 176429.000000 | 17556.416667 | 1545451.000000 | 1613.916667 | 169500.000000 | --- | 409890.000000 | --- | --- | --- | --- |
+| `asin` | 1066.291667 | 619106.000000 | 5055.666667 | 561219.000000 | 23774.958333 | 1879308.000000 | 6039.000000 | 802820.000000 | --- | 623160.000000 | --- | --- | --- | --- |
+| `acos` | 1161.958333 | 584811.000000 | 4808.291667 | 524594.000000 | 23779.458333 | 1905410.000000 | 5581.541667 | 755478.000000 | --- | 659720.000000 | --- | --- | --- | --- |
+| `atan` | 1242.166667 | 488085.000000 | 1252.375000 | 406354.000000 | 5637.625000 | 880861.000000 | 8487.500000 | 1102370.000000 | --- | 298900.000000 | --- | --- | --- | --- |
+| `atan2` | 1177.083333 | 801881.000000 | 1488.500000 | 568423.000000 | 6081.166667 | 632691.000000 | 9119.041667 | 1140317.000000 | --- | 395530.000000 | --- | --- | --- | --- |
+| `sqrt` | 317.416667 | 161312.000000 | 830.875000 | 150564.000000 | 11192.083333 | 689419.000000 | 9462.583333 | 1900558.000000 | --- | --- | --- | 47430.000000 | --- | 105510.000000 |
+| `hypot` | 833.250000 | 524412.000000 | 832.000000 | 208554.000000 | --- | --- | 15600.791667 | 2448086.000000 | --- | --- | --- | --- | --- | --- |
+| `hypot_fast2` | 833.083333 | 524409.000000 | 833.500000 | 148361.000000 | --- | --- | --- | --- | --- | 131180.000000 | --- | --- | --- | --- |
+| `hypot_fast` | 833.041667 | 524416.000000 | 1161.041667 | 197763.000000 | --- | --- | 1359.750000 | 197837.000000 | --- | --- | --- | --- | --- | --- |
+| `log2` | 1151.916667 | --- | 996.208333 | --- | 24372.666667 | --- | 3882.416667 | --- | --- | --- | --- | --- | --- | --- |
+| `ln` | 1147.875000 | 468729.000000 | 1329.375000 | 212894.000000 | 339461.708333 | 35403726.000000 | 3872.083333 | 509092.000000 | --- | --- | --- | --- | --- | 124870.000000 |
+| `log10` | 1151.250000 | --- | 1319.333333 | --- | 29406.833333 | --- | 4597.833333 | --- | --- | --- | --- | --- | --- | --- |
+| `pow2` | 777.750000 | --- | 1356.583333 | --- | 66019.916667 | --- | 1652.291667 | --- | --- | --- | --- | --- | --- | --- |
+| `exp` | 845.500000 | 492336.000000 | 1389.041667 | 187135.000000 | 72677.500000 | 8357724.000000 | 1690.708333 | 262397.000000 | --- | --- | --- | --- | --- | --- |
+| `pow10` | 850.583333 | --- | 1386.791667 | --- | 1782.291667 | --- | 1796.958333 | --- | --- | --- | --- | --- | --- | --- |
+| `pow` | 1807.083333 | --- | 2657.625000 | --- | 377902.500000 | --- | 5457.083333 | --- | --- | --- | --- | --- | --- | --- |
+
+### Speed vs libm (ratio)
+
+`libm` time ÷ implementation time on that platform. **> 1.0** = faster than platform libm for that timed loop. Ratios are rounded to two decimal places.
+
+| Function | libm (host) | libm (ESP32-S3) | qf_math (host) | qf_math (ESP32-S3) | libfixmath (host) | libfixmath (ESP32-S3) | fr_math (host) | fr_math (ESP32-S3) | FastTrig (host) | FastTrig (ESP32-S3) | ESP-DSP (host) | ESP-DSP (ESP32-S3) | espp/math (host) | espp/math (ESP32-S3) |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `sin_rad` | 1.00 | 1.00 | 2.08 | 4.30 | 0.35 | 0.78 | 0.82 | 1.32 | --- | 2.08 | --- | --- | --- | 1.94 |
+| `sin_deg` | 1.00 | 1.00 | 2.04 | 4.49 | 0.16 | 0.80 | 0.28 | 1.35 | --- | 2.42 | --- | --- | --- | 1.84 |
+| `sin_bam` | 1.00 | 1.00 | 1.59 | 2.06 | 0.16 | 0.39 | 1.00 | 1.65 | --- | 1.07 | --- | --- | --- | 1.00 |
+| `cos_rad` | 1.00 | 1.00 | 2.20 | 4.39 | 0.22 | 0.76 | 0.28 | 0.90 | --- | 1.71 | --- | --- | --- | 1.54 |
+| `cos_deg` | 1.00 | 1.00 | 1.73 | 4.44 | 0.18 | 0.78 | 0.30 | 1.12 | --- | 1.98 | --- | --- | --- | 1.51 |
+| `cos_bam` | 1.00 | 1.00 | 1.75 | 2.33 | 0.17 | 0.42 | 0.95 | 1.55 | --- | 1.07 | --- | --- | --- | 0.91 |
+| `tan_rad` | 1.00 | 1.00 | 1.72 | 3.56 | 0.11 | 0.42 | 0.33 | 1.31 | --- | 1.53 | --- | --- | --- | --- |
+| `tan_deg` | 1.00 | 1.00 | 1.77 | 3.66 | 0.10 | 0.42 | 0.13 | 1.26 | --- | 1.64 | --- | --- | --- | --- |
+| `tan_bam` | 1.00 | 1.00 | 1.33 | 2.32 | 0.08 | 0.26 | 0.88 | 2.42 | --- | 1.00 | --- | --- | --- | --- |
+| `asin` | 1.00 | 1.00 | 0.21 | 1.10 | 0.04 | 0.33 | 0.18 | 0.77 | --- | 0.99 | --- | --- | --- | --- |
+| `acos` | 1.00 | 1.00 | 0.24 | 1.11 | 0.05 | 0.31 | 0.21 | 0.77 | --- | 0.89 | --- | --- | --- | --- |
+| `atan` | 1.00 | 1.00 | 0.99 | 1.20 | 0.22 | 0.55 | 0.15 | 0.44 | --- | 1.63 | --- | --- | --- | --- |
+| `atan2` | 1.00 | 1.00 | 0.79 | 1.41 | 0.19 | 1.27 | 0.13 | 0.70 | --- | 2.03 | --- | --- | --- | --- |
+| `sqrt` | 1.00 | 1.00 | 0.38 | 1.07 | 0.03 | 0.23 | 0.03 | 0.08 | --- | --- | --- | 3.40 | --- | 1.53 |
+| `hypot` | 1.00 | 1.00 | 1.00 | 2.51 | --- | --- | 0.05 | 0.21 | --- | --- | --- | --- | --- | --- |
+| `hypot_fast2` | 1.00 | 1.00 | 1.00 | 3.53 | --- | --- | --- | --- | --- | 4.00 | --- | --- | --- | --- |
+| `hypot_fast` | 1.00 | 1.00 | 0.72 | 2.65 | --- | --- | 0.61 | 2.65 | --- | --- | --- | --- | --- | --- |
+| `log2` | 1.00 | --- | 1.16 | --- | 0.05 | --- | 0.30 | --- | --- | --- | --- | --- | --- | --- |
+| `ln` | 1.00 | 1.00 | 0.86 | 2.20 | 0.00 | 0.01 | 0.30 | 0.92 | --- | --- | --- | --- | --- | 3.75 |
+| `log10` | 1.00 | --- | 0.87 | --- | 0.04 | --- | 0.25 | --- | --- | --- | --- | --- | --- | --- |
+| `pow2` | 1.00 | --- | 0.57 | --- | 0.01 | --- | 0.47 | --- | --- | --- | --- | --- | --- | --- |
+| `exp` | 1.00 | 1.00 | 0.61 | 2.63 | 0.01 | 0.06 | 0.50 | 1.88 | --- | --- | --- | --- | --- | --- |
+| `pow10` | 1.00 | --- | 0.61 | --- | 0.48 | --- | 0.47 | --- | --- | --- | --- | --- | --- | --- |
+| `pow` | 1.00 | --- | 0.68 | --- | 0.00 | --- | 0.33 | --- | --- | --- | --- | --- | --- | --- |
+
+## Compiled Code Size
+
+These object-size rows come from the host comparison build plus any ESP32 peer objects available from the LilyGO PlatformIO build. They are library/variant footprints, not firmware totals.
+
+### Library footprint (ROM-sized `.o` totals, decimal bytes)
+
+Each **row is one compiled library/object variant** you might ship on its own (or as your SDK’s math layer). **Do not add the rows together** — real firmware picks **one** primary approximate math approach (plus vendor libm snippets). The benchmark binary links several libraries only to score them in one harness, not because products bundle them all. **qf_math** is **float**; **libfixmath** / **fr_math** are **fixed-point** (different animals — see **README.md** § Float vs fixed-point).
+
+**Where these numbers come from** — see [compare/README.md](README.md) § *Footprint rows (what is actually measured)*.
+
+| Library | Variant | Bytes (dec) | What is counted |
+| :--- | :--- | ---:|:---|
+| **qf_math** | full | 10308 | Single TU `qf_math.o` at `-Os` (same as `make lib`). |
+| **qf_math** | lean | 8952 | `qf_math.o` with `-DQF_MATH_LEAN`: rad/deg/BAM trig, inverse trig, `log2`/`ln`, `pow2`/`exp`/`pow`, `sqrt`, `hypot`/`hypot_fast2`/`hypot_fast8` — no `log10`/`pow10`, waves, or ADSR (see `qf_math.h`). |
+| **libfixmath** | bench subset | 3632 | Sum of the `lf_*.o` objects from **Makefile** `LIBFIXMATH_SRCS` (trig + sqrt + exp + fix16 core) — only what the compare harness links. |
+| **fr_math** | full | 9768 | `FR_math.c` at `-Os` with default feature set. |
+| **fr_math** | lean | 5340 | `FR_math.c` with `-DFR_LEAN -DFR_NO_PRINT`: radian trig, inverse trig, log/exp, sqrt; omits degree/BAM wrappers, hypot, waves/ADSR, and print helpers. |
+| **fr_math** | bench no-print | 8316 | `FR_math.c` with `-DFR_NO_PRINT`, `-Os`; this is the object linked by the portable compare harness. |
+| **FastTrig** | ESP32 peer object | 2562 | PlatformIO-built `FastTrig.cpp.o` when the LilyGO benchmark has been built; `---` if unavailable on this machine. |
+| **ESP-DSP** | local scalar subset | --- | No standalone library object in this harness; the sqrt approximation is a tiny local wrapper in `main.cpp`. |
+| **espp/math** | local scalar subset | --- | Header-only/local scalar subset in the LilyGO benchmark, not a separately sized library object. |
+
+> **Note:** There is no single **`libm`** row — vendor math lives in prebuilt toolchain archives; the perf tables time `sinf`/`cosf`/…, not a standalone `.o` total.
+
+<details><summary>libfixmath object breakdown (bench link only)</summary>
+
+| Object file | Bytes |
+| :--- | ---:|
+| `lf_fix16_exp.o` | 864 |
+| `lf_fix16_sqrt.o` | 216 |
+| `lf_fix16_trig.o` | 1132 |
+| `lf_fix16.o` | 1080 |
+| `lf_fract32.o` | 212 |
+| `lf_uint32.o` | 128 |
+
+</details>
 
 ---
 

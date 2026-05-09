@@ -47,7 +47,7 @@
 
 <h2>Caveats (read before trusting the table)</h2>
 <ul>
-  <li><strong>Host vs embedded:</strong> Desktop <code>sinf</code>/<code>sqrtf</code> are often highly tuned (SIMD, large vendor tables). On Cortex-M, soft-float, or without a divider, the balance shifts—re-profile on your silicon.</li>
+  <li><strong>Host vs embedded:</strong> Desktop <code>sinf</code>/<code>sqrtf</code> are often highly tuned (SIMD, large vendor tables). On Cortex-M, RISC-V, soft-float, or without a divider, the balance shifts—re-profile on your silicon. MCU snapshots (ESP32-S3, Raspberry Pi Pico 2 ARM &amp; RISC-V) live in <code>compare/MCU_BENCHMARK_SNAPSHOT*.md</code>.</li>
   <li><strong>Error metrics are mixed by design:</strong> amplitude % for trig on ±1 outputs, relative % for <code>exp</code>/<code>sqrt</code>/<code>hypot</code>, absolute radians scaled to % of π for <code>acos</code>/<code>atan2</code>, and absolute Δ vs double for <code>log2</code>/<code>ln</code> on the bench grid (see footnote under the table).</li>
   <li><strong>Not a standards substitute:</strong> Domain edge cases, errno, and full IEEE exception behavior are out of scope—this is firmware-friendly approximation.</li>
   <li><strong>Multi-library compare matrices</strong> (libfixmath, fr_math, …) stay in-repo under <code>compare/</code> — see <a href="https://github.com/deftio/qf_math/tree/main/compare">compare/</a>.</li>

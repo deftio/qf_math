@@ -1,0 +1,6 @@
+#include "/Users/manu/deftio/qf_math/build/compare/third_party/libfixmath/libfixmath/fix16.c"
+#include "/Users/manu/deftio/qf_math/build/compare/third_party/libfixmath/libfixmath/fract32.c"
+#include "/Users/manu/deftio/qf_math/build/compare/third_party/libfixmath/libfixmath/uint32.c"
+#include "/Users/manu/deftio/qf_math/build/compare/third_party/libfixmath/libfixmath/fix16_trig.c"
+#include "/Users/manu/deftio/qf_math/build/compare/third_party/libfixmath/libfixmath/fix16_sqrt.c"
+#include "/Users/manu/deftio/qf_math/build/compare/third_party/libfixmath/libfixmath/fix16_exp.c"

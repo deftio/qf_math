@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Replace <!--QF_MATH_BENCH_TABLE_BEGIN--> … END in docs/pages/index.html with benchmark output."""
+"""Replace <!--QF_MATH_BENCH_TABLE_BEGIN--> … END in pages/index.html with benchmark output."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ import sys
 def main() -> None:
     root = pathlib.Path(__file__).resolve().parent.parent
     bench = root / "build" / "qf_math_bench"
-    page = root / "docs" / "pages" / "index.html"
+    page = root / "pages" / "index.html"
     begin = "<!--QF_MATH_BENCH_TABLE_BEGIN-->"
     end = "<!--QF_MATH_BENCH_TABLE_END-->"
 

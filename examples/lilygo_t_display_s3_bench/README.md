@@ -4,7 +4,7 @@ Target board: **[LilyGO T-Display-S3](https://www.lilygo.cc/products/t-display-s
 
 Same portable workload as **[`compare/benchmark_core.c`](../../compare/benchmark_core.c)** / **`make compare`** (qf_math, newlib `sinf`/`…`, libfixmath + fr_math via float bridges), plus ESP32-S3-only fast-math peer sections for **FastTrig**, **ESP-DSP** sqrt, **espp/math** scalar helpers, and inverse trig (`asin`, `acos`, `atan`, `atan2`) where the float-domain peer exposes those functions.
 
-From repo root, **`make mcu-benchmark-snapshot`** (needs **pyserial**, **pio**, USB) flashes this sketch and overwrites **[`compare/MCU_BENCHMARK_SNAPSHOT.md`](../../compare/MCU_BENCHMARK_SNAPSHOT.md)** (~many minutes — full compare loops).
+From repo root, **`make mcu-benchmark-snapshot`** (needs **pyserial**, **pio**, USB) flashes this sketch and overwrites **[`compare/MCU_BENCHMARK_SNAPSHOT_ESP32S3.md`](../../compare/MCU_BENCHMARK_SNAPSHOT_ESP32S3.md)** (~many minutes — full compare loops).
 
 Firmware still emits Markdown between serial markers `:::: DOC_TABLE_START ::::` … `:::: DOC_TABLE_END ::::` for manual capture if needed.
 

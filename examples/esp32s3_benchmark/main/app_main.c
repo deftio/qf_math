@@ -54,7 +54,7 @@ void app_main(void)
     bench_emit_markdown_doc_snapshot(stdout, &res, device_line);
     printf(":::: DOC_TABLE_END ::::\n");
 
-    printf("\n(Copy between DOC_TABLE markers into compare/MCU_BENCHMARK_SNAPSHOT.md)\n\n");
+    printf("\n(Copy between DOC_TABLE markers into compare/MCU_BENCHMARK_SNAPSHOT_ESP32S3.md)\n\n");
 
     printf("(Same kernels as host `make compare` — see examples/esp32s3_benchmark/README.md)\n\n");
 }

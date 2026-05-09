@@ -6,6 +6,11 @@
 
 Single-file style library in `src/qf_math.c` + `src/qf_math.h`. Approximate trig, log/exp, sqrt/hypot, waves, ADSR. BSD-2-Clause. No runtime deps for the library TU.
 
+## Documentation
+
+- `docs/` — Markdown documentation (algorithms, API reference, fr_math relationship, integration)
+- `pages/` — GitHub Pages HTML site (compact bench + overview)
+
 ## Entry points
 
 - API / constants: `src/qf_math.h`
@@ -13,7 +18,7 @@ Single-file style library in `src/qf_math.c` + `src/qf_math.h`. Approximate trig
 - Host correctness tests (vs libm): `test/qf_math_test.c`
 - Bench vs libm only: `tools/qf_math_bench.c` → `make bench`
 - Multi-library compare + GitHub Markdown report: `compare/` → `make compare`, `make compare-github-report`
-- ESP32-S3 on-device compare loops (needs `make compare-deps`): `examples/lilygo_t_display_s3_bench/` (PlatformIO, LilyGO T-Display-S3) or `examples/esp32s3_benchmark/` (ESP-IDF)
+- MCU on-device compare loops (needs `make compare-deps`): `examples/lilygo_t_display_s3_bench/` (PlatformIO, LilyGO T-Display-S3), `examples/esp32s3_benchmark/` (ESP-IDF), or `examples/pico2_benchmark/` (Arduino, Raspberry Pi Pico 2)
 
 ## Build
 

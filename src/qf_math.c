@@ -1,7 +1,7 @@
 /**
  *  @file qf_math.c - QF_MATH: Quick Float Math Library implementation
  *
- *  Table-based fast approximate math on IEEE 754 float32.
+ *  Fast approximate math on IEEE 754 float32 (table trig; polynomial log2 / Horner pow2 paths).
  *  Same algorithmic approach as FR_math.c but operating natively on floats.
  *
  *  @author M A Chatterjee <deftio [at] deftio [dot] com>
@@ -153,7 +153,7 @@ static const qf gTAN_TAB[QF_TRIG_TABLE_SIZE] = {
     3.29655821f,    3.44833976f,    3.61353568f,    3.79406340f,    3.99222378f,    4.21080203f,    4.45320222f,    4.72362933f,
     5.02733949f,    5.37099044f,    5.76314201f,    6.21498777f,    6.74145241f,    7.36288764f,    8.10778580f,    9.01730236f,
     10.15317039f,    11.61239886f,    13.55666924f,    16.27700796f,    20.35546762f,    27.15017067f,    40.73548387f,    81.48324021f,
-    32767.00000000f,    -81.48324021f,    -40.73548387f,    -27.15017067f,    -20.35546762f,    -16.27700796f,    -13.55666924f,    -11.61239886f,
+    QF_TAN_MAX,    -81.48324021f,    -40.73548387f,    -27.15017067f,    -20.35546762f,    -16.27700796f,    -13.55666924f,    -11.61239886f,
     -10.15317039f,    -9.01730236f,    -8.10778580f,    -7.36288764f,    -6.74145241f,    -6.21498777f,    -5.76314201f,    -5.37099044f,
     -5.02733949f,    -4.72362933f,    -4.45320222f,    -4.21080203f,    -3.99222378f,    -3.79406340f,    -3.61353568f,    -3.44833976f,
     -3.29655821f,    -3.15658033f,    -3.02704320f,    -2.90678576f,    -2.79481277f,    -2.69026624f,    -2.59240252f,    -2.50057389f,
@@ -185,7 +185,7 @@ static const qf gTAN_TAB[QF_TRIG_TABLE_SIZE] = {
     3.29655821f,    3.44833976f,    3.61353568f,    3.79406340f,    3.99222378f,    4.21080203f,    4.45320222f,    4.72362933f,
     5.02733949f,    5.37099044f,    5.76314201f,    6.21498777f,    6.74145241f,    7.36288764f,    8.10778580f,    9.01730236f,
     10.15317039f,    11.61239886f,    13.55666924f,    16.27700796f,    20.35546762f,    27.15017067f,    40.73548387f,    81.48324021f,
-    32767.00000000f,    -81.48324021f,    -40.73548387f,    -27.15017067f,    -20.35546762f,    -16.27700796f,    -13.55666924f,    -11.61239886f,
+    QF_TAN_MAX,    -81.48324021f,    -40.73548387f,    -27.15017067f,    -20.35546762f,    -16.27700796f,    -13.55666924f,    -11.61239886f,
     -10.15317039f,    -9.01730236f,    -8.10778580f,    -7.36288764f,    -6.74145241f,    -6.21498777f,    -5.76314201f,    -5.37099044f,
     -5.02733949f,    -4.72362933f,    -4.45320222f,    -4.21080203f,    -3.99222378f,    -3.79406340f,    -3.61353568f,    -3.44833976f,
     -3.29655821f,    -3.15658033f,    -3.02704320f,    -2.90678576f,    -2.79481277f,    -2.69026624f,    -2.59240252f,    -2.50057389f,
@@ -202,36 +202,6 @@ static const qf gTAN_TAB[QF_TRIG_TABLE_SIZE] = {
     -0.19891237f,    -0.18618540f,    -0.17351646f,    -0.16090136f,    -0.14833599f,    -0.13581628f,    -0.12333824f,    -0.11089791f,
     -0.09849140f,    -0.08611485f,    -0.07376443f,    -0.06143635f,    -0.04912685f,    -0.03683218f,    -0.02454862f,    -0.01227246f,
     0.00000000f
-};
-
-/* 2^f table for f in [0, 1], 65 entries.
- * Entry i = 2^(i/64).
- * gPOW2_TAB[0] = 1.0, gPOW2_TAB[64] = 2.0. */
-static const qf gPOW2_TAB[65] = {
-    1.00000000f,    1.01088929f,    1.02189715f,    1.03302488f,    1.04427378f,    1.05564518f,    1.06714040f,    1.07876080f,
-    1.09050773f,    1.10238258f,    1.11438674f,    1.12652162f,    1.13878863f,    1.15118923f,    1.16372486f,    1.17639699f,
-    1.18920712f,    1.20215673f,    1.21524736f,    1.22848054f,    1.24185781f,    1.25538076f,    1.26905096f,    1.28287002f,
-    1.29683955f,    1.31096121f,    1.32523664f,    1.33966752f,    1.35425555f,    1.36900242f,    1.38390988f,    1.39897967f,
-    1.41421356f,    1.42961334f,    1.44518081f,    1.46091779f,    1.47682615f,    1.49290773f,    1.50916443f,    1.52559815f,
-    1.54221083f,    1.55900440f,    1.57598085f,    1.59314215f,    1.61049033f,    1.62802742f,    1.64575548f,    1.66367658f,
-    1.68179283f,    1.70010635f,    1.71861930f,    1.73733384f,    1.75625216f,    1.77537649f,    1.79470908f,    1.81425218f,
-    1.83400809f,    1.85397913f,    1.87416763f,    1.89457598f,    1.91520656f,    1.93606179f,    1.95714412f,    1.97845603f,
-    2.00000000f
-};
-
-/* log2(m) table for m in [1, 2), 65 entries.
- * Entry i = log2(1 + i/64).
- * gLOG2_TAB[0] = 0.0, gLOG2_TAB[64] = 1.0. */
-static const qf gLOG2_TAB[65] = {
-    0.00000000f,    0.02236781f,    0.04439412f,    0.06608919f,    0.08746284f,    0.10852446f,    0.12928302f,    0.14974712f,
-    0.16992500f,    0.18982456f,    0.20945337f,    0.22881869f,    0.24792751f,    0.26678654f,    0.28540222f,    0.30378075f,
-    0.32192809f,    0.33985000f,    0.35755200f,    0.37503943f,    0.39231742f,    0.40939094f,    0.42626475f,    0.44294350f,
-    0.45943162f,    0.47573343f,    0.49185310f,    0.50779464f,    0.52356196f,    0.53915881f,    0.55458885f,    0.56985561f,
-    0.58496250f,    0.59991284f,    0.61470984f,    0.62935662f,    0.64385619f,    0.65821148f,    0.67242534f,    0.68650053f,
-    0.70043972f,    0.71424552f,    0.72792045f,    0.74146699f,    0.75488750f,    0.76818432f,    0.78135971f,    0.79441587f,
-    0.80735492f,    0.82017896f,    0.83289001f,    0.84549005f,    0.85798100f,    0.87036472f,    0.88264305f,    0.89481776f,
-    0.90689060f,    0.91886324f,    0.93073734f,    0.94251451f,    0.95419631f,    0.96578428f,    0.97727992f,    0.98868469f,
-    1.00000000f
 };
 
 /*=======================================================
@@ -266,6 +236,30 @@ static qf qf_inv_pos(qf x)
     qf y = v.f;
     y = y * (2.0f - x * y);
     y = y * (2.0f - x * y);
+    y = y * (2.0f - x * y);
+    return y;
+}
+
+/* Good enough for atan argument reduction; the cubic approximation dominates error. */
+static qf qf_inv_pos_atan(qf x)
+{
+    union { qf f; uint32_t u; } v;
+    v.f = x;
+    v.u = 0x7EF311C3u - v.u;
+
+    qf y = v.f;
+    y = y * (2.0f - x * y);
+    y = y * (2.0f - x * y);
+    return y;
+}
+
+static qf qf_inv_pos_atan_fast(qf x)
+{
+    union { qf f; uint32_t u; } v;
+    v.f = x;
+    v.u = 0x7EF311C3u - v.u;
+
+    qf y = v.f;
     y = y * (2.0f - x * y);
     return y;
 }
@@ -423,9 +417,91 @@ qf qf_tan_deg(qf deg)
 /*=======================================================
  * Inverse trig
  *
- * Uses binary search on the sine quadrant table, same approach
- * as FR_acos in FR_math.c.
+ * asin(|x|): three C¹ cubic Hermite spans on [0, 3/4] (knots 0, 1/4, 1/2, 3/4);
+ * on (3/4, 1) use asin(ax)=atan(ax/sqrt(1-ax²)) via sqrt((1-ax)*(1+ax)) (avoids Hermite on
+ * a span where asin'(u) explodes toward u=1 — cubic overshoot otherwise). Above 0.9975 still
+ * use pi/2 - sqrt(2(1-|x|)) with acos semantics; tiny |x|: ~x. acos folds sign + HALF_PI - asin(|x|).
+ * atan: six quadratic spans on [0,1]; reciprocal reduction atan(x)=pi/2-atan(1/x) when x>1.
  */
+
+#define ASIN_SMALL_ABSX 0.084f
+#define ASIN_TAIL_THR   0.9975f
+#define ASIN_ATAN_CROSS  0.75f
+
+/* atan unit poly ---------------------------------------------------------*/
+
+static inline qf qf_atan_unit(qf x)
+{
+    qf x2 = x * x;
+    qf p = 0.02083510f;
+    p = p * x2 - 0.08513300f;
+    p = p * x2 + 0.18014100f;
+    p = p * x2 - 0.33029950f;
+    p = p * x2 + 0.99986600f;
+    return x * p;
+}
+
+/* nonnegative asin(ax), ax in [0, 1]; shared by acos and asin. */
+static inline qf qf_asin_pos_kernel(qf ax)
+{
+    if (ax <= 0.0f)
+        return 0.0f;
+    if (ax >= 1.0f)
+        return QF_HALF_PI;
+    /* Same tail as legacy acos: asin(ax) ~= pi/2 - sqrt(2(1-ax)), ax→1^- */
+    if (ax > ASIN_TAIL_THR)
+        return QF_HALF_PI - qf_sqrt(2.0f * (1.0f - ax));
+    if (ax < ASIN_SMALL_ABSX)
+        return ax;
+
+    if (ax > ASIN_ATAN_CROSS) {
+        /*
+         * asin(ax) = atan(ax / sqrt(1-ax²)), nonnegative branch.
+         * 1-ax² = (1-ax)*(1+ax) — stable away from catastrophic cancel in (1-x*x) alone near 1,
+         * and fast atan(...) replaces ill-conditioned Hermite when asin'(u) is large for u≈3/4..1.
+         */
+        qf w = qf_sqrt((1.0f - ax) * (1.0f + ax));
+        qf scaled = ax * qf_inv_pos(w);
+        return qf_atan(scaled);
+    }
+
+    qf a, da, y0, m0, y1, m1;
+
+    if (ax <= 0.25f) {
+        a = 0.0f;
+        da = 0.25f;
+        y0 = 0.0f;
+        m0 = 1.0f;
+        y1 = 0.25268024f;
+        m1 = 1.03279555f;
+    } else if (ax <= 0.5f) {
+        a = 0.25f;
+        da = 0.25f;
+        y0 = 0.25268024f;
+        m0 = 1.03279555f;
+        y1 = 0.52359879f;
+        m1 = 1.15470052f;
+    } else {
+        /* (0.5, 0.75] */
+        a = 0.5f;
+        da = 0.25f;
+        y0 = 0.52359879f;
+        m0 = 1.15470052f;
+        y1 = 0.84806210f;
+        m1 = 1.51185787f;
+    }
+
+    qf t = (ax - a) * qf_inv_pos(da);
+    qf t2 = t * t;
+    qf t3 = t2 * t;
+    qf dm0 = da * m0;
+    qf dm1 = da * m1;
+    qf h00 = (2.0f * t3 - 3.0f * t2 + 1.0f);
+    qf h10 = (t3 - 2.0f * t2 + t);
+    qf h01 = (-2.0f * t3 + 3.0f * t2);
+    qf h11 = (t3 - t2);
+    return h00 * y0 + h10 * dm0 + h01 * y1 + h11 * dm1;
+}
 
 qf qf_acos(qf x)
 {
@@ -435,40 +511,7 @@ qf qf_acos(qf x)
     int sign = (x < 0.0f) ? 1 : 0;
     qf ax = sign ? -x : x;
 
-    /* Small-angle fast path near x=1: acos(x) ~ sqrt(2*(1-x)) */
-    if (ax > 0.9975f) {
-        qf r = qf_sqrt(2.0f * (1.0f - ax));
-        return sign ? (QF_PI - r) : r;
-    }
-
-    /* Binary search on the first quadrant of the full-cycle sine table. */
-    int32_t lo = 0, hi = SIN_QUAD_SIZE;
-
-    while (lo < hi) {
-        int32_t mid = (lo + hi) >> 1;
-        if (gSIN_TAB[mid] < ax)
-            lo = mid + 1;
-        else
-            hi = mid;
-    }
-
-    int32_t idx = lo;
-    qf frac;
-
-    if (idx <= 0) {
-        idx = 0;
-        frac = 0.0f;
-    } else {
-        qf d   = gSIN_TAB[idx] - gSIN_TAB[idx - 1];
-        qf num = ax - gSIN_TAB[idx - 1];
-        frac = (d > 0.0f) ? (num * qf_inv_pos(d)) : 0.0f;
-        idx = idx - 1;
-    }
-
-    /* asin angle: each table step spans pi/256 radians */
-    qf asin_angle = ((qf)idx + frac) * SIN_STEP_RAD;
-
-    /* acos = pi/2 - asin */
+    qf asin_angle = qf_asin_pos_kernel(ax);
     qf result = QF_HALF_PI - asin_angle;
 
     return sign ? (QF_PI - result) : result;
@@ -476,12 +519,35 @@ qf qf_acos(qf x)
 
 qf qf_asin(qf x)
 {
-    return QF_HALF_PI - qf_acos(x);
+    if (x >=  1.0f) return  QF_HALF_PI;
+    if (x <= -1.0f) return -QF_HALF_PI;
+
+    int neg = x < 0.0f;
+    qf ax = neg ? -x : x;
+    qf r = qf_asin_pos_kernel(ax);
+    return neg ? -r : r;
 }
 
 qf qf_atan(qf x)
 {
-    return qf_atan2(x, 1.0f);
+    if (x == 0.0f)
+        return x;
+
+    int32_t neg = x < 0.0f;
+    if (neg)
+        x = -x;
+
+    if (x >= QF_TAN_MAX)
+        return neg ? -QF_HALF_PI : QF_HALF_PI;
+
+    int32_t recip = x > 1.0f;
+    if (recip)
+        x = qf_inv_pos_atan(x);
+
+    qf result = qf_atan_unit(x);
+    if (recip)
+        result = QF_HALF_PI - result;
+    return neg ? -result : result;
 }
 
 qf qf_atan2(qf y, qf x)
@@ -498,29 +564,15 @@ qf qf_atan2(qf y, qf x)
     qf ax = (x < 0.0f) ? -x : x;
     qf ay = (y < 0.0f) ? -y : y;
 
-    qf h = qf_hypot_fast8(ax, ay);
-    if (h == 0.0f) return 0.0f;
-
     qf q1_angle;
-    #define ATAN2_SMALL 0.084f  /* ~sin(4.8 degrees) */
-
-    if (ay <= ax) {
-        /* angle in [0, 45°]: use asin(ay/h) */
-        qf sin_val = ay * qf_inv_pos(h);
-        if (sin_val < ATAN2_SMALL)
-            q1_angle = sin_val;  /* asin(x) ~ x */
-        else
-            q1_angle = qf_asin(sin_val);
+    if (ay == ax) {
+        q1_angle = QF_PI * 0.25f;
+    } else if (ay < ax) {
+        q1_angle = qf_atan_unit(ay * qf_inv_pos_atan_fast(ax));
     } else {
-        /* angle in [45°, 90°]: use acos(ax/h) */
-        qf cos_val = ax * qf_inv_pos(h);
-        if (cos_val < ATAN2_SMALL)
-            q1_angle = QF_HALF_PI - cos_val;  /* acos near pi/2 */
-        else
-            q1_angle = qf_acos(cos_val);
+        q1_angle = QF_HALF_PI - qf_atan_unit(ax * qf_inv_pos_atan_fast(ay));
     }
 
-    /* Apply quadrant from signs of x and y */
     if (x > 0.0f)
         return (y > 0.0f) ? q1_angle : -q1_angle;
     return (y > 0.0f) ? (QF_PI - q1_angle) : (q1_angle - QF_PI);
@@ -529,36 +581,51 @@ qf qf_atan2(qf y, qf x)
 /*=======================================================
  * Logarithms
  *
- * qf_log2 uses the IEEE 754 exponent for the integer part and the
- * 65-entry table for the mantissa fractional part. Same algorithmic
- * approach as FR_log2 (leading-bit + table interpolation).
+ * qf_log2: exponent bits for integer part; fractional part log2(1+t) with
+ * t = (m-1) from IEEE mantissa (normal: t = M/2^23) via a degree-7 polynomial
+ * in t (zero constant — exact at t=0). Denormals / NaN / Inf use the same
+ * float reconstruction of m as the legacy FR_log2 path, then the same poly.
  */
+
+/* 1 / 2^23 — t = (qf)M * QF_INV_POW23 for normal finite x. */
+#define QF_INV_POW23  1.19209290e-7f
+
+/* log2(1+t) on t in [0, 1); Chebyshev-weighted LS, ~4.5e-7 max error vs float ref. */
+static inline qf qf_log2_1p_poly(qf t)
+{
+    qf r = 0.0151275283f;
+    r = r * t - 0.0781569619f;
+    r = r * t + 0.1923834968f;
+    r = r * t - 0.3246154315f;
+    r = r * t + 0.4731130529f;
+    r = r * t - 0.7205154732f;
+    r = r * t + 1.4426640445f;
+    return t * r;
+}
 
 qf qf_log2(qf x)
 {
     if (x <= 0.0f) return QF_DOMAIN_ERROR;
 
-    /* Extract exponent and mantissa from IEEE 754 */
     union { qf f; uint32_t u; } v;
     v.f = x;
-    int32_t exp_raw = (int32_t)((v.u >> 23) & 0xFF) - 127;
+    uint32_t ux = v.u;
+    uint32_t e_biased = ux & 0x7F800000u;
+    int32_t exp_raw = (int32_t)((ux >> 23) & 0xFF) - 127;
+    uint32_t M = ux & 0x007FFFFFu;
 
-    /* Set exponent to 0 (bias 127) to get mantissa in [1, 2) */
-    v.u = (v.u & 0x007FFFFFu) | 0x3F800000u;
+    /* Normal finite: exponent field non-zero — t = M/2^23, log2(m) = log2(1+t). */
+    if (e_biased != 0 && e_biased < 0x7F800000u) {
+        qf t = (qf)M * QF_INV_POW23;
+        return (qf)exp_raw + qf_log2_1p_poly(t);
+    }
+
+    /* Legacy path: subnormals, ±0 residue, NaN, Inf — same reconstruction as FR_log2. */
+    v.u = (ux & 0x007FFFFFu) | 0x3F800000u;
     qf m = v.f;
 
-    /* Table lookup for log2(m), m in [1, 2) */
     qf m_frac = m - 1.0f;
-    qf t = m_frac * 64.0f;
-    int32_t idx = (int32_t)t;
-    qf frac = t - (qf)idx;
-    if (idx >= 64) { idx = 63; frac = 1.0f; }
-
-    qf lo_v = gLOG2_TAB[idx];
-    qf hi_v = gLOG2_TAB[idx + 1];
-    qf mant_log2 = lo_v + (hi_v - lo_v) * frac;
-
-    return (qf)exp_raw + mant_log2;
+    return (qf)exp_raw + qf_log2_1p_poly(m_frac);
 }
 
 qf qf_ln(qf x)
@@ -580,32 +647,91 @@ qf qf_log10(qf x)
 /*=======================================================
  * Exponentials
  *
- * qf_pow2 splits the input into integer and fractional parts,
- * looks up 2^frac in the 65-entry table, and multiplies by 2^int
- * using IEEE 754 exponent construction. Same approach as FR_pow2.
+ * qf_pow2: round-to-nearest split x = n + f with |f| <= 0.5 via the float
+ * mantissa-offset trick (1.5*2^23), degree-5 Horner approximation to 2^f on
+ * [-0.5, 0.5], then add n to IEEE exponent bits when in range — otherwise
+ * p * make_pow2i(n). If the split is invalid (e.g. pathological floats), falls
+ * back to floor + 2^[0,1) via same poly scaled for [0.5, 1).
  */
+
+#define QF_POW2_MAGIC    12582912.0f          /* float32(3 * 2^22): round-to-nearest int */
+#define QF_POW2_MAGIC_U  0x4B400000u         /* bitwise of QF_POW2_MAGIC */
+
+/* MiniMax-style 2^f on [-0.5, 0.5]; max error ~2.5e-6 vs double 2^f. */
+static inline qf qf_exp2_poly_half(qf f)
+{
+    qf p = 0.001333355f;
+    p = p * f + 0.009618129f;
+    p = p * f + 0.055504109f;
+    p = p * f + 0.240226507f;
+    p = p * f + 0.693147181f;
+    return p * f + 1.0f;
+}
+
+/* Fast 2^frac for frac in [0, 1), using symmetry about 0.5. */
+static qf qf_exp2_frac_01(qf frac)
+{
+    if (frac > 0.5f)
+        return 2.0f * qf_exp2_poly_half(frac - 1.0f);
+    return qf_exp2_poly_half(frac);
+}
 
 qf qf_pow2(qf x)
 {
-    int32_t int_part = qf_ifloor(x);
-    qf frac_part = x - (qf)int_part;
+    union { qf f; uint32_t u; } vx;
+    vx.f = x;
+    uint32_t xbits = vx.u;
+    uint32_t exp_x = xbits & 0x7F800000u;
+    uint32_t mant_x = xbits & 0x007FFFFFu;
 
-    /* Table lookup for 2^frac, frac in [0, 1) */
-    qf t = frac_part * 64.0f;
-    int32_t idx = (int32_t)t;
-    qf frac = t - (qf)idx;
-    if (idx >= 64) { idx = 63; frac = 1.0f; }
+    /* NaN: unchanged. Inf: pow2(-inf)=0, pow2(+inf)=+inf */
+    if (exp_x == 0x7F800000u) {
+        if (mant_x != 0)
+            return x;
+        return (int32_t)(xbits >> 31) ? 0.0f : x;
+    }
 
-    qf lo = gPOW2_TAB[idx];
-    qf hi = gPOW2_TAB[idx + 1];
-    qf mant = lo + (hi - lo) * frac;
+    union { qf f; uint32_t u; } vn;
+    vn.f = x + QF_POW2_MAGIC;
+    int32_t n = (int32_t)(vn.u - QF_POW2_MAGIC_U);
+    qf f = x - (qf)n;
 
-    return mant * make_pow2i(int_part);
+    qf p;
+    if (QF_ABS(f) > 0.502f) {
+        /* Magic unreliable (e.g. huge |x|); floor-split + frac in [0,1). */
+        n = qf_ifloor(x);
+        qf frac = x - (qf)n;
+        p = qf_exp2_frac_01(frac);
+    } else {
+        p = qf_exp2_poly_half(f);
+    }
+
+    union { qf f; uint32_t u; } vp;
+    vp.f = p;
+    uint32_t pb = vp.u;
+    uint32_t exp_p = (pb >> 23) & 0xFFu;
+
+    /* p should be finite normal (~2^[-1/2,1/2]) — if not, use multiply path */
+    if (exp_p == 0 || exp_p >= 255 || (pb & 0x7FFFFFFFu) == 0)
+        return p * make_pow2i(n);
+
+    int32_t ne = (int32_t)exp_p + n;
+    if (ne < 1 || ne > 254)
+        return p * make_pow2i(n);
+
+    vp.u = (pb & 0x807FFFFFu) | ((uint32_t)ne << 23);
+    return vp.f;
 }
 
 qf qf_exp(qf x)
 {
     return qf_pow2(x * QF_LOG2E);
+}
+
+qf qf_pow(qf x, qf y)
+{
+    if (x <= 0.0f) return QF_DOMAIN_ERROR;
+    return qf_pow2(y * qf_log2(x));
 }
 
 #if !QF_MATH_LEAN_BUILD
@@ -674,6 +800,23 @@ qf qf_hypot(qf x, qf y)
  *   Segment [0, 0.125]:       a = 1 - 1/1024                    = 0.99902344
  *                              b = 1/16 - 1/2048                 = 0.06201172
  */
+qf qf_hypot_fast2(qf x, qf y)
+{
+    qf hi, lo;
+
+    if (x < 0.0f) x = -x;
+    if (y < 0.0f) y = -y;
+
+    if (x > y) { hi = x; lo = y; }
+    else       { hi = y; lo = x; }
+
+    if (hi == 0.0f) return 0.0f;
+
+    if (hi * 0.5f < lo)
+        return hi * 0.81376422f + lo * 0.59235915f;
+    return hi * 0.98586827f + lo * 0.23606798f;
+}
+
 qf qf_hypot_fast8(qf x, qf y)
 {
     qf hi, lo;

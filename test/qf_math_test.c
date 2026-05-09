@@ -61,7 +61,7 @@ static int approx_vs_double_rel(float got, double ref, double tol_rel)
 
 /* Tolerance constants */
 #define TRIG_TOL   5.0e-4f   /* table-based trig: ~129 entries + lerp     */
-#define LOG_TOL    1.0e-3f   /* table-based log2: 65 entries + lerp       */
+#define LOG_TOL    1.0e-3f   /* polynomial log2(1+t) on mantissa         */
 #define EXP_TOL    1.0e-3f   /* table-based pow2: 65 entries + lerp       */
 #define SQRT_TOL   1.0e-4f   /* 2 Newton-Raphson iterations               */
 #define HYPOT_TOL  2.0e-3f   /* piecewise-linear fast8: ~0.1% peak error  */
@@ -74,7 +74,7 @@ static int approx_vs_double_rel(float got, double ref, double tol_rel)
 #define SWEEP_LOG_REL      4.5e-3
 #define SWEEP_EXP_REL      2.6e-3
 #define SWEEP_SQRT_REL     3e-4
-#define SWEEP_ATAN2_ABS    3e-3
+#define SWEEP_ATAN2_ABS    3e-3f
 
 /*=======================================================
  * Test: macros and constants
@@ -475,6 +475,16 @@ static int test_pow10(void)
     return TEST_PASS;
 }
 
+static int test_pow(void)
+{
+    if (!approx_eq(qf_pow(2.0f, 3.0f), 8.0f, EXP_TOL)) return TEST_FAIL;
+    if (!approx_eq(qf_pow(9.0f, 0.5f), 3.0f, EXP_TOL)) return TEST_FAIL;
+    if (!approx_eq(qf_pow(10.0f, -1.0f), 0.1f, EXP_TOL)) return TEST_FAIL;
+    if (qf_pow(0.0f, 2.0f) != QF_DOMAIN_ERROR) return TEST_FAIL;
+    if (qf_pow(-2.0f, 3.0f) != QF_DOMAIN_ERROR) return TEST_FAIL;
+    return TEST_PASS;
+}
+
 /*=======================================================
  * Test: sqrt
  */
@@ -502,7 +512,7 @@ static int test_sqrt(void)
 }
 
 /*=======================================================
- * Test: hypot and hypot_fast8
+ * Test: hypot, hypot_fast2, hypot_fast8
  */
 
 static int test_hypot(void)
@@ -512,6 +522,37 @@ static int test_hypot(void)
     if (!approx_eq(qf_hypot(5.0f, 0.0f), 5.0f, SQRT_TOL)) return TEST_FAIL;
     if (!approx_eq(qf_hypot(0.0f, 0.0f), 0.0f, 1e-6f))   return TEST_FAIL;
     if (!approx_eq(qf_hypot(-3.0f, -4.0f), 5.0f, SQRT_TOL)) return TEST_FAIL;
+    return TEST_PASS;
+}
+
+static int test_hypot_fast2(void)
+{
+    /* 3-4-5 triangle */
+    if (!approx_eq(qf_hypot_fast2(3.0f, 4.0f), 5.0f, 0.015f * 5.0f)) return TEST_FAIL;
+
+    /* Axis-aligned */
+    if (!approx_eq(qf_hypot_fast2(0.0f, 7.0f), 7.0f, 0.015f * 7.0f)) return TEST_FAIL;
+    if (!approx_eq(qf_hypot_fast2(7.0f, 0.0f), 7.0f, 0.015f * 7.0f)) return TEST_FAIL;
+
+    /* Symmetry */
+    if (!approx_eq(qf_hypot_fast2(3.0f, 4.0f),
+                   qf_hypot_fast2(-3.0f, -4.0f), 1e-6f)) return TEST_FAIL;
+    if (!approx_eq(qf_hypot_fast2(3.0f, 4.0f),
+                   qf_hypot_fast2(4.0f, 3.0f), 1e-6f)) return TEST_FAIL;
+
+    /* Zero */
+    if (!approx_eq(qf_hypot_fast2(0.0f, 0.0f), 0.0f, 1e-6f)) return TEST_FAIL;
+
+    /* Sweep 0..90 degrees, check error is within 1.5% of true hypot */
+    for (int deg = 0; deg <= 90; deg += 3) {
+        qf rad = (qf)deg * QF_DEG2RAD_K;
+        qf x = cosf(rad) * 1000.0f;
+        qf y = sinf(rad) * 1000.0f;
+        qf ref = sqrtf(x * x + y * y);
+        qf got = qf_hypot_fast2(x, y);
+        qf err = QF_ABS(got - ref) / ref;
+        if (err > 0.015f) return TEST_FAIL;
+    }
     return TEST_PASS;
 }
 
@@ -982,11 +1023,13 @@ int main(void)
     RUN_TEST(test_log2_pow2_frac_edge);
     RUN_TEST(test_exp);
     RUN_TEST(test_pow10);
+    RUN_TEST(test_pow);
     printf("\n");
 
     printf("Sqrt / Hypot:\n");
     RUN_TEST(test_sqrt);
     RUN_TEST(test_hypot);
+    RUN_TEST(test_hypot_fast2);
     RUN_TEST(test_hypot_fast8);
     printf("\n");
 

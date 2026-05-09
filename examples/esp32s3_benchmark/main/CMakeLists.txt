@@ -40,6 +40,9 @@ idf_component_register(
 target_compile_definitions(${COMPONENT_LIB} PRIVATE FIXMATH_NO_CACHE FR_NO_PRINT)
 
 target_compile_options(${COMPONENT_LIB} PRIVATE
+  -Wall
+  -Wextra
+  -Wshadow
   -Wno-unused-parameter
   -Wno-sign-conversion
   -Wno-conversion)

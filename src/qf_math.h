@@ -1,7 +1,8 @@
 /**
  *  @file qf_math.h - QF_MATH: Quick Float Math Library
  *
- *  Fast approximate math on IEEE 754 float32. Table-based trig, log, exp,
+ *  Fast approximate math on IEEE 754 float32. Table-based trig; log2/ln/log10 via a
+ *  mantissa polynomial; pow2/exp/pow10 via Horner/minimax-style approximations; plus
  *  sqrt, hypot, wave generators, and ADSR — all in one translation unit (~few–10 KB
  *  @ -Os depending on feature set).
  *  No external dependencies (no libm required).
@@ -138,7 +139,7 @@ typedef float qf;
 
 /**
  * When defined, compile a **peer-comparable** subset: radian/deg/BAM trig, inverse
- * trig, log2/ln, pow2/exp, sqrt, hypot/hypot_fast8 — omit **log10**, **pow10**, wave
+ * trig, log2/ln, pow2/exp, pow, sqrt, hypot/hypot_fast2/hypot_fast8 — omit **log10**, **pow10**, wave
  * generators, and ADSR. Use for ROM sizing next to `compare/` harness peers; default
  * builds ship the full API.
  */
@@ -156,11 +157,14 @@ typedef float qf;
  * with one float multiply before table lookup.
  *
  * sin/cos: input in radians, output in [-1.0, 1.0]
- * tan: input in radians, output saturated at +/- QF_TAN_MAX near poles
+ * tan: input in radians, output saturated near poles. Exact poles return
+ *      QF_TAN_MAX; one-sided near-pole values clamp to +/- QF_TAN_MAX.
  *
  * Worst-case error: ~3e-5 (same as FR_math at s15.16).
  */
-#define QF_TAN_MAX  32767.0f
+/* Float-domain tangent pole clamp. Deliberately much larger than fr_math's
+ * fixed-point pole value while still leaving headroom for cheap arithmetic. */
+#define QF_TAN_MAX  8388608.0f
 
 qf qf_sin_bam(uint16_t bam);
 qf qf_cos_bam(uint16_t bam);
@@ -182,8 +186,9 @@ qf qf_tan_deg(qf deg);
  * atan: output in [-pi/2, pi/2]
  * atan2: output in [-pi, pi]
  *
- * Uses binary search on the sine quadrant table (same approach
- * as FR_acos / FR_asin / FR_atan2).
+ * acos / asin: shared asin(|x|): three Hermite spans on [0, 3/4], atan(ax/sqrt(1-x*x))
+ * for x>3/4 using sqrt((1-x)*(1+x)), sqrt tail above 0.9975 and small-|x| ~ x.
+ * atan: six quadratic spans on [0,1]; atan(x)=pi/2−atan(1/x) for x>1; atan2 uses ratio swaps + quadrant folds.
  */
 qf qf_acos(qf x);
 qf qf_asin(qf x);
@@ -207,10 +212,12 @@ qf qf_log10(qf x);
  * Exponentials — table-based fast approximations
  *
  * Uses a 65-entry table for 2^frac lookup (same table as FR_pow2).
- * exp and pow10 are derived from pow2 via base conversion.
+ * exp and pow10 are derived from pow2 via base conversion. pow(x,y) uses
+ * pow2(y * log2(x)) and returns QF_DOMAIN_ERROR for x <= 0.
  */
 qf qf_pow2(qf x);
 qf qf_exp(qf x);
+qf qf_pow(qf x, qf y);
 #if !QF_MATH_LEAN_BUILD
 qf qf_pow10(qf x);
 #endif
@@ -221,6 +228,8 @@ qf qf_pow10(qf x);
  * qf_sqrt: Newton-Raphson with IEEE 754 initial estimate.
  *           Returns QF_DOMAIN_ERROR for x < 0.
  * qf_hypot: sqrt(x*x + y*y) via qf_sqrt.
+ * qf_hypot_fast2: 2-segment piecewise-linear magnitude approximation
+ *           (~1.4% peak error, one segment compare).
  * qf_hypot_fast8: 8-segment piecewise-linear magnitude approximation
  *           (~0.10% peak error, no division, same algorithm as
  *           FR_hypot_fast8). Based on US Patent 6,567,777 B1
@@ -228,6 +237,7 @@ qf qf_pow10(qf x);
  */
 qf qf_sqrt(qf x);
 qf qf_hypot(qf x, qf y);
+qf qf_hypot_fast2(qf x, qf y);
 qf qf_hypot_fast8(qf x, qf y);
 
 /*===============================================

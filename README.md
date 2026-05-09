@@ -4,7 +4,7 @@
 [![Docs](https://img.shields.io/badge/docs-compare%20%26%20bench-blue.svg)](compare/README.md)
 [![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](src/qf_math.h)
 [![GitHub](https://img.shields.io/badge/GitHub-repo-181717.svg?logo=github)](https://github.com/deftio/qf_math)
-
+   
 [![PlatformIO](https://img.shields.io/badge/PlatformIO-library-teal.svg)](https://registry.platformio.org/libraries/deftio/qf_math)
 [![Arduino](https://img.shields.io/badge/Arduino-from%20source-teal.svg)](https://github.com/deftio/qf_math)
 [![ESP-IDF](https://img.shields.io/badge/ESP--IDF-component-teal.svg)](https://components.espressif.com/components/deftio/qf_math)
@@ -13,9 +13,11 @@
 
 **qf_math** is a compact, dependency-free C99 library for **fast approximate math on IEEE-754 `float`**. It targets embedded firmware where you want predictable cost and small flash footprint: table-driven trig, logarithms, exponentials, `sqrt`, `hypot`, waveform helpers, and a floating-point ADSR envelope—without pulling in full libm semantics on platforms where that matters.
 
+[github.com/deftio/fr_math](github.com/deftio/fr_math) is the fixed point (pure integer) cousin of this library with identical apis.
+
 | | |
 |---|---|
-| **Language** | C99 (`float` API, `qf` typedef) |
+| **Language** | C99 (`float` API, `qf` typedef), plus optional C++ header wrapper |
 | **Dependencies** | None at compile time for the library itself |
 | **License** | BSD-2-Clause — see `LICENSE.txt` |
 | **Layout** | `src/` library · `test/` unit tests · `build/` all binaries & fetched third-party sources |
@@ -42,9 +44,11 @@ For targets **without a hardware FPU** (or when you want to avoid soft-float cos
 ## Repository layout
 
 ```
-src/           qf_math.c, qf_math.h   — drop-in library
+src/           qf_math.c, qf_math.h/.hpp — drop-in C library + C++ wrapper
 test/          qf_math_test.c         — correctness vs libm on host
-examples/      optional demos — ESP-IDF (`examples/esp32s3_benchmark`) + LilyGO T-Display-S3 PlatformIO (`examples/lilygo_t_display_s3_bench`)
+docs/          Markdown documentation (algorithms, API, fr_math, integration)
+pages/         GitHub Pages site (compact HTML + CSS; deploy via Actions)
+examples/      optional demos — ESP-IDF (`esp32s3_benchmark`), LilyGO T-Display-S3 PlatformIO (`lilygo_t_display_s3_bench`), Raspberry Pi Pico 2 Arduino (`pico2_benchmark`)
 docker/        multi-arch toolchain image + cross size report (fr_math-style)
 compare/       matrices vs other math libs + benchmark harness (see below)
 tools/         extra shell helpers & qf_math vs libm micro-benchmark
@@ -101,14 +105,14 @@ Documentation tables live under **`compare/`** (`LIBRARIES.md` for platforms/rep
 | `make compare-github-report` | Regenerates **[`compare/BENCHMARK_REPORT.md`](compare/BENCHMARK_REPORT.md)** for GitHub (embedded bench tables + sizes). |
 | `make compare-tests` | CMake-builds libfixmath `tests_ro64` under `build/compare/third_party/libfixmath-build` and runs it. |
 | `make compare-fr-tests` | Runs **fr_math**’s upstream `make test` against the shallow clone (`compare/run_fr_math_tests.sh`). |
-| `make mcu-benchmark-snapshot` | Flash **LilyGO T-Display-S3** bench and rewrite **`compare/MCU_BENCHMARK_SNAPSHOT.md`** via UART (**pio**, **pyserial**). |
-| `make benchmark-crossplatform` | Rewrite **`compare/BENCHMARK_CROSSPLATFORM.md`** — Host \| MCU **Speed vs libm** ratios from the two committed snapshots (no hardware). |
+| `make mcu-benchmark-snapshot` | Flash MCU bench and rewrite **`compare/MCU_BENCHMARK_SNAPSHOT*.md`** via UART (**pio** / Arduino, **pyserial**). Supports LilyGO T-Display-S3, ESP32-S3, and Raspberry Pi Pico 2. |
+| `make benchmark-crossplatform` | Rewrite **`compare/BENCHMARK_CROSSPLATFORM.md`** — Host \| MCU **Speed vs libm** ratios from the committed snapshots (no hardware). |
 
 **Interpretation:** Desktop timings are *not* MCU timings. Bridged benchmarks include float↔fixed overhead that disappears when you stay natively in `fix16_t` / fixed-radix `s32`. The automated `s32` peer row is **fr_math**; other fast libraries are surveyed in [`compare/PEERS.md`](compare/PEERS.md) but are not wired into the reproducible host/ESP32-S3 harness yet. Use these numbers for intuition and regression tracking, not as a substitute for profiling on your silicon.
 
-**On silicon:** **[examples/lilygo_t_display_s3_bench](examples/lilygo_t_display_s3_bench/README.md)** (PlatformIO, **LilyGO T-Display-S3**) or **[examples/esp32s3_benchmark](examples/esp32s3_benchmark/README.md)** (ESP-IDF) runs the **same** [`benchmark_core.c`](compare/benchmark_core.c) loops so UART / USB serial captures wall-clock under Xtensa / newlib `libm`.
+**On silicon:** **[examples/lilygo_t_display_s3_bench](examples/lilygo_t_display_s3_bench/README.md)** (PlatformIO, **LilyGO T-Display-S3**), **[examples/esp32s3_benchmark](examples/esp32s3_benchmark/README.md)** (ESP-IDF), or **[examples/pico2_benchmark](examples/pico2_benchmark/)** (Arduino, **Raspberry Pi Pico 2** ARM / RISC-V) run the **same** [`benchmark_core.c`](compare/benchmark_core.c) loops so UART / USB serial captures wall-clock on real hardware.
 
-**Host vs MCU (relative only):** **[compare/BENCHMARK_CROSSPLATFORM.md](compare/BENCHMARK_CROSSPLATFORM.md)** merges **Speed vs libm** tables from [`compare/BENCHMARK_REPORT.md`](compare/BENCHMARK_REPORT.md) (POSIX snapshot) and [`compare/MCU_BENCHMARK_SNAPSHOT.md`](compare/MCU_BENCHMARK_SNAPSHOT.md); regenerate with **`make benchmark-crossplatform`** after refreshing those files.
+**Host vs MCU (relative only):** **[compare/BENCHMARK_CROSSPLATFORM.md](compare/BENCHMARK_CROSSPLATFORM.md)** merges **Speed vs libm** tables from [`compare/BENCHMARK_REPORT.md`](compare/BENCHMARK_REPORT.md) (POSIX snapshot) and the MCU snapshots (`MCU_BENCHMARK_SNAPSHOT*.md` — ESP32-S3, Pico 2 ARM, Pico 2 RISC-V); regenerate with **`make benchmark-crossplatform`** after refreshing those files.
 
 ---
 
@@ -116,7 +120,7 @@ Documentation tables live under **`compare/`** (`LIBRARIES.md` for platforms/rep
 
 ### PlatformIO
 
-Use `library.json` at the repo root: add this folder as a local library or publish following [PlatformIO library format](https://docs.platformio.org/en/latest/manifests/library-json/index.html). Headers resolve from `src/` (`#include "qf_math.h"`).
+Use `library.json` at the repo root: add this folder as a local library or publish following [PlatformIO library format](https://docs.platformio.org/en/latest/manifests/library-json/index.html). Headers resolve from `src/` (`#include "qf_math.h"` for C, `#include "qf_math.hpp"` for C++).
 
 ### Espressif ESP-IDF
 
@@ -132,8 +136,8 @@ Public surface is declared in `src/qf_math.h`:
 
 - **Macros**: clamps, interpolation, deg/rad/BAM, radix bridges (`QF_TO_FR`, …).
 - **Trig**: `qf_sin`, `qf_cos`, `qf_tan`, BAM-native variants, inverse trig.
-- **Log/exp**: `qf_log2`, `qf_ln`, `qf_log10`, `qf_pow2`, `qf_exp`, `qf_pow10`.
-- **Length**: `qf_sqrt`, `qf_hypot`, `qf_hypot_fast8` (piecewise-linear magnitude).
+- **Log/exp/pow**: `qf_log2`, `qf_ln`, `qf_log10`, `qf_pow2`, `qf_exp`, `qf_pow10`, `qf_pow`.
+- **Length**: `qf_sqrt`, `qf_hypot`, `qf_hypot_fast2`, `qf_hypot_fast8` (piecewise-linear magnitude).
 - **Audio-ish**: LFSR noise, PWM/square/saw/triangle waves, `qf_adsr_*` envelope.
 
 Domain violations (`sqrt` of negative, `log` of non-positive) return `QF_DOMAIN_ERROR`.
@@ -144,7 +148,8 @@ Domain violations (`sqrt` of negative, `log` of non-positive) return `QF_DOMAIN_
 
 | File | Purpose |
 |------|---------|
-| [`docs/`](docs/) | **GitHub Pages** site root (enable *Settings → Pages → GitHub Actions*; live at `https://deftio.github.io/qf_math/` after first deploy). |
+| [`docs/`](docs/) | **Markdown documentation** — algorithms, API reference, fr_math relationship, integration guide |
+| [`pages/`](pages/) | **GitHub Pages** site (enable *Settings → Pages → GitHub Actions*; live at `https://deftio.github.io/qf_math/` after first deploy) |
 | [`compare/README.md`](compare/README.md) | Compare harness docs (`make compare`, sizes, upstream suites, GitHub report) |
 | [`compare/BENCHMARK_REPORT.md`](compare/BENCHMARK_REPORT.md) | Last checked-in **host benchmark + size snapshot** (run `make compare-github-report` to refresh) |
 | [`compare/BENCHMARK_CROSSPLATFORM.md`](compare/BENCHMARK_CROSSPLATFORM.md) | Host vs MCU **relative** ratios (`make benchmark-crossplatform`; refresh snapshots first) |

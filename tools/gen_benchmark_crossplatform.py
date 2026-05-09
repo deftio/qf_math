@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 """
-Merge “Speed vs libm” ratio tables from compare/BENCHMARK_REPORT.md and
-compare/MCU_BENCHMARK_SNAPSHOT.md → compare/BENCHMARK_CROSSPLATFORM.md
+Merge benchmark matrices from compare/BENCHMARK_REPORT.md (host) and
+compare/MCU_BENCHMARK_SNAPSHOT_ESP32S3.md (ESP32-S3 MCU) →
+compare/BENCHMARK_CROSSPLATFORM.md
+
+Output uses the same wide single-table style as MCU_BENCHMARK_SNAPSHOT_ESP32S3.md:
+one matrix per Accuracy, Wall-clock, Speed vs libm — each with paired
+Host | ESP32-S3 columns per library.
 """
 
 from __future__ import annotations
@@ -12,99 +17,38 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 HOST_MD = ROOT / "compare" / "BENCHMARK_REPORT.md"
-MCU_MD = ROOT / "compare" / "MCU_BENCHMARK_SNAPSHOT.md"
+MCU_MD = ROOT / "compare" / "MCU_BENCHMARK_SNAPSHOT_ESP32S3.md"
 OUT_MD = ROOT / "compare" / "BENCHMARK_CROSSPLATFORM.md"
+MCU_LABEL = "ESP32-S3"
 
-FUNCS = [
-    "sin_rad",
-    "sin_deg",
-    "sin_bam",
-    "cos_rad",
-    "cos_deg",
-    "cos_bam",
-    "tan_rad",
-    "tan_deg",
-    "tan_bam",
-    "asin",
-    "acos",
-    "atan",
-    "atan2",
-    "sqrt",
-    "hypot",
-    "hypot_fast",
-    "ln",
-    "exp",
-]
-LIBS_DISPLAY = [
-    ("libm", "libm"),
-    ("qf_math", "**qf_math**"),
-    ("libfixmath", "**libfixmath** (float bridge)"),
-    ("fr_math", "**fr_math** (float bridge)"),
-    ("FastTrig", "**FastTrig**"),
-    ("ESP-DSP", "**ESP-DSP**"),
-    ("espp/math", "**espp/math**"),
+# Column order in source Markdown tables (must match bench_emit_markdown_tables).
+LIB_ORDER_KEYS = [
+    "libm",
+    "qf_math",
+    "libfixmath",
+    "fr_math",
+    "FastTrig",
+    "ESP-DSP",
+    "espp/math",
 ]
 
-
-def extract_host_meta(md: str) -> str:
-    m = re.search(r"\| UTC time \| ([^|]+) \|", md)
-    if m:
-        return m.group(1).strip()
-    return "—"
-
-
-def extract_mcu_generated(md: str) -> str:
-    m = re.search(r"_Generated:_ \*\*([^*]+)\*\*", md)
-    if m:
-        return m.group(1).strip()
-    return "—"
+LIB_SHORT = {
+    "libm": "libm",
+    "qf_math": "qf_math",
+    "libfixmath": "libfixmath",
+    "fr_math": "fr_math",
+    "FastTrig": "FastTrig",
+    "ESP-DSP": "ESP-DSP",
+    "espp/math": "espp/math",
+}
 
 
-def extract_device_line(md: str) -> str:
-    m = re.search(r"\| Device \| ([^|]+) \|", md)
-    if m:
-        return m.group(1).strip()
-    return "ESP32-class MCU (see MCU snapshot)"
-
-
-def extract_speed_ratio_table(md: str) -> dict[str, dict[str, str]]:
-    """Parse the generated function-row Speed vs libm matrix."""
-    lines = md.splitlines()
-    sec = None
-    for i, line in enumerate(lines):
-        if "### Speed vs libm" in line:
-            sec = i
-            break
-    if sec is None:
-        raise ValueError("### Speed vs libm section not found")
-
-    start = None
-    for i in range(sec, len(lines)):
-        if lines[i].strip().startswith("| Function |"):
-            start = i
-            break
-    if start is None:
-        raise ValueError("| Function | ratio table not found after Speed vs libm")
-
-    header = [p.strip() for p in lines[start].split("|")[1:-1]]
-    libs = [normalize_key(h) for h in header[1:]]
-    rows: dict[str, dict[str, str]] = {lib: {} for lib in libs}
-    for line in lines[start + 2 :]:
-        line = line.strip()
-        if not line.startswith("|"):
-            break
-        parts = [p.strip() for p in line.split("|")[1:-1]]
-        if len(parts) < len(header):
-            continue
-        fn = parts[0].replace("`", "").strip()
-        for lib, cell in zip(libs, parts[1:]):
-            rows.setdefault(lib, {})[fn] = cell
-    return rows
-
-
-def normalize_key(key: str) -> str:
-    k = key.lower()
-    if "qf_math" in k or k == "qf_math":
+def normalize_lib_header(header: str) -> str | None:
+    k = header.lower().strip()
+    k = re.sub(r"[`*]", "", k)
+    if k == "libm":
+        return "libm"
+    if "qf_math" in k or k.startswith("qf"):
         return "qf_math"
     if "libfixmath" in k:
         return "libfixmath"
@@ -116,26 +60,155 @@ def normalize_key(key: str) -> str:
         return "ESP-DSP"
     if "espp" in k:
         return "espp/math"
-    if k == "libm":
-        return "libm"
-    return key
+    return None
 
 
-def normalize_table(raw: dict[str, dict[str, str]]) -> dict[str, dict[str, str]]:
-    out: dict[str, dict[str, str]] = {}
-    for k, row in raw.items():
-        out[k] = {fn: format_fixed6_cell(cell) for fn, cell in row.items()}
+def find_section_line(lines: list[str], title_substr: str) -> int | None:
+    for i, line in enumerate(lines):
+        if line.startswith("### ") and title_substr in line:
+            return i
+    return None
+
+
+def parse_function_table(
+    lines: list[str], start_idx: int, has_metric: bool, decimals: int = 6
+) -> tuple[list[str], dict[str, dict[str, str]], dict[str, str] | None]:
+    """
+    Parse a markdown table starting at the first '| Function |' after start_idx.
+    Returns (function_names_in_order, lib_to_fn_to_cell, metrics_by_fn or None).
+    """
+    i = start_idx
+    while i < len(lines) and not lines[i].strip().startswith("| Function |"):
+        i += 1
+    if i >= len(lines):
+        raise ValueError("No | Function | table found")
+
+    header = [p.strip() for p in lines[i].split("|")[1:-1]]
+    if has_metric:
+        if len(header) < 3 or not header[1].lower().startswith("metric"):
+            raise ValueError("Expected Function | Metric | ...")
+        lib_headers = header[2:]
+    else:
+        lib_headers = header[1:]
+
+    lib_keys: list[str | None] = [normalize_lib_header(h) for h in lib_headers]
+
+    data: dict[str, dict[str, str]] = {k: {} for k in LIB_ORDER_KEYS}
+    metrics: dict[str, str] | None = {} if has_metric else None
+    order: list[str] = []
+
+    for line in lines[i + 2 :]:
+        line = line.strip()
+        if not line.startswith("|"):
+            break
+        parts = [p.strip() for p in line.split("|")[1:-1]]
+        if len(parts) < 2:
+            continue
+        fn = parts[0].replace("`", "").strip()
+        order.append(fn)
+        p = 1
+        if has_metric and metrics is not None:
+            metrics[fn] = parts[1]
+            p = 2
+        vals = parts[p:]
+        for j, key in enumerate(lib_keys):
+            if j >= len(vals) or key is None:
+                continue
+            if key in data:
+                data[key][fn] = format_cell(vals[j], decimals)
+    return order, data, metrics
+
+
+def format_cell(s: str, decimals: int = 6) -> str:
+    t = re.sub(r"[*`]", "", s.strip())
+    if t in {"—", "---", ""}:
+        return "---"
+    try:
+        return f"{float(t):.{decimals}f}"
+    except ValueError:
+        return t
+
+
+def extract_tables(md: str, section_substr: str, has_metric: bool, decimals: int = 6):
+    lines = md.splitlines()
+    sec = find_section_line(lines, section_substr)
+    if sec is None:
+        return None
+    return parse_function_table(lines, sec, has_metric, decimals)
+
+
+def extract_markdown_section(md: str, title_substr: str) -> list[str]:
+    lines = md.splitlines()
+    sec = find_section_line(lines, title_substr)
+    if sec is None:
+        return []
+
+    out: list[str] = []
+    for line in lines[sec:]:
+        if line == "---" and out:
+            break
+        out.append(line)
+    while out and out[-1] == "":
+        out.pop()
     return out
 
 
-def format_fixed6_cell(cell: str) -> str:
-    if cell.strip() in {"—", "---"}:
-        return "---"
-    try:
-        value = float(cell)
-    except ValueError:
-        return cell
-    return f"{value:.6f}"
+def merge_orders(
+    a: list[str] | None, b: list[str] | None
+) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for src in (a or [], b or []):
+        for f in src:
+            if f not in seen:
+                seen.add(f)
+                out.append(f)
+    return out
+
+
+def emit_unified_table(
+    title: str,
+    footnote: str | None,
+    fn_order: list[str],
+    host_d: dict[str, dict[str, str]],
+    mcu_d: dict[str, dict[str, str]],
+    metrics: dict[str, str] | None,
+) -> list[str]:
+    out: list[str] = []
+    out.append(f"### {title}")
+    out.append("")
+    if footnote:
+        out.append(footnote)
+        out.append("")
+    hdr = ["Function"]
+    if metrics is not None:
+        hdr.append("Metric")
+    for k in LIB_ORDER_KEYS:
+        label = LIB_SHORT[k]
+        hdr.append(f"{label} (host)")
+        hdr.append(f"{label} ({MCU_LABEL})")
+    out.append("| " + " | ".join(hdr) + " |")
+    sep_parts = []
+    for idx, _h in enumerate(hdr):
+        if idx == 0:
+            sep_parts.append(":---")  # Function
+        elif idx == 1 and metrics is not None:
+            sep_parts.append(":---")  # Metric
+        else:
+            sep_parts.append("---:")
+    out.append("| " + " | ".join(sep_parts) + " |")
+    for fn in fn_order:
+        row = [f"`{fn}`"]
+        if metrics is not None:
+            row.append(metrics.get(fn, "—"))
+        for k in LIB_ORDER_KEYS:
+            hc = host_d.get(k, {}).get(fn, "---")
+            mc = mcu_d.get(k, {}).get(fn, "---")
+            row.append(hc)
+            row.append(mc)
+        out.append("| " + " | ".join(row) + " |")
+    out.append("")
+    return out
 
 
 def main() -> int:
@@ -149,97 +222,157 @@ def main() -> int:
     host_txt = HOST_MD.read_text(encoding="utf-8")
     mcu_txt = MCU_MD.read_text(encoding="utf-8")
 
-    host_meta = extract_host_meta(host_txt)
-    mcu_gen = extract_mcu_generated(mcu_txt)
-    device = extract_device_line(mcu_txt)
+    host_meta = ""
+    m = re.search(r"\| UTC time \| ([^|]+) \|", host_txt)
+    if m:
+        host_meta = m.group(1).strip()
 
-    host_tbl = normalize_table(extract_speed_ratio_table(host_txt))
-    mcu_tbl = normalize_table(extract_speed_ratio_table(mcu_txt))
+    mcu_gen = ""
+    m = re.search(r"_Generated:_ \*\*([^*]+)\*\*", mcu_txt)
+    if m:
+        mcu_gen = m.group(1).strip()
 
-    buf = []
-    buf.append("# Benchmark — host vs MCU (relative)")
+    device = "MCU (see snapshot)"
+    m = re.search(r"\| Device \| ([^|]+) \|", mcu_txt)
+    if m:
+        device = m.group(1).strip()
+
+    host_acc = extract_tables(host_txt, "### Accuracy", True)
+    mcu_acc = extract_tables(mcu_txt, "### Accuracy", True)
+    host_mse = extract_tables(host_txt, "### Accuracy — mean squared error", True)
+    mcu_mse = extract_tables(mcu_txt, "### Accuracy — mean squared error", True)
+    host_wall = extract_tables(host_txt, "### Wall-clock", False)
+    mcu_wall = extract_tables(mcu_txt, "### Wall-clock", False)
+    host_spd = extract_tables(host_txt, "### Speed vs libm", False, 2)
+    mcu_spd = extract_tables(mcu_txt, "### Speed vs libm", False, 2)
+    footprint = extract_markdown_section(host_txt, "### Library footprint")
+
+    if not host_spd or not mcu_spd:
+        print("Could not parse Speed vs libm tables", file=sys.stderr)
+        return 1
+
+    _, host_spd_data, _ = host_spd
+    _, mcu_spd_data, _ = mcu_spd
+    fn_speed = merge_orders(host_spd[0], mcu_spd[0])
+
+    buf: list[str] = []
+    buf.append("# Benchmark — host vs ESP32-S3 (combined tables)")
     buf.append("")
     buf.append(
-        "Side‑by‑side **`libm` ÷ implementation** ratios from the same benchmark loops "
-        "([`benchmark_core.c`](benchmark_core.c)). "
-        "**Values above 1.0** mean that row beat **`sinf`/`cosf`/…** on that platform "
-        "for the timed loop; **below 1.0** means slower than libm."
+        "Side-by-side **POSIX host** ([`BENCHMARK_REPORT.md`](BENCHMARK_REPORT.md)) and "
+        "**ESP32-S3 MCU** ([`MCU_BENCHMARK_SNAPSHOT_ESP32S3.md`](MCU_BENCHMARK_SNAPSHOT_ESP32S3.md)) for the same "
+        "[`benchmark_core.c`](benchmark_core.c) loops. "
+        "Each library has **two columns**: **(host)** then **(ESP32-S3)**."
     )
     buf.append("")
-    buf.append("## Where the numbers live")
+    buf.append("## Sources & timestamps")
     buf.append("")
-    buf.append("| Platform | Role | Source file | Regenerate |")
-    buf.append("|----------|------|-------------|------------|")
-    buf.append(
-        "| **POSIX host** | Apple **Darwin** arm64, desktop libm reference | "
-        "[`BENCHMARK_REPORT.md`](BENCHMARK_REPORT.md) | **`make compare-github-report`** |"
-    )
-    buf.append(
-        "| **MCU** | On‑silicon (below) | [`MCU_BENCHMARK_SNAPSHOT.md`](MCU_BENCHMARK_SNAPSHOT.md) "
-        "| **`make mcu-benchmark-snapshot`** (USB + `pio` + `pyserial`) |"
-    )
-    buf.append(
-        "| **Combined relative tables** | Host vs MCU ratios only | This file | **`make benchmark-crossplatform`** "
-        "(or `python3 tools/gen_benchmark_crossplatform.py`) |"
-    )
-    buf.append("")
-    buf.append("### Snapshot timestamps (committed)")
-    buf.append("")
-    buf.append(f"| Host (`BENCHMARK_REPORT`) | UTC **`{host_meta}`** |")
-    buf.append(f"| MCU (`MCU_BENCHMARK_SNAPSHOT`) | **`{mcu_gen}`** · {device} |")
+    buf.append("| | |")
+    buf.append("|-|-|")
+    buf.append(f"| **Host** | UTC **`{host_meta}`** — `make compare-github-report` |")
+    buf.append(f"| **ESP32-S3** | **`{mcu_gen}`** · {device} — `make mcu-benchmark-snapshot` |")
     buf.append("")
     buf.append(
-        "> **Chip note:** the checked‑in MCU row is **Espressif ESP32‑S3** "
-        "(**LilyGO T‑Display‑S3**, Arduino core). "
-        "**ESP32‑S2** is a different core; to add S2 numbers, port/run the same benchmark "
-        "and regenerate [`MCU_BENCHMARK_SNAPSHOT.md`](MCU_BENCHMARK_SNAPSHOT.md), then re-run this script."
+        "> **Do not compare absolute microseconds** across host vs ESP32-S3. "
+        "**Speed vs libm** ratios (`libm` time ÷ implementation time) are comparable "
+        "*within* each column; > 1.0 means faster than that platform’s `sinf`/`sqrtf`/… for that loop."
     )
     buf.append("")
     buf.append("## Interpretation")
     buf.append("")
     buf.append(
-        "- **Do not compare absolute microseconds** across columns — host vs MCU clocks and "
-        "libc builds differ wildly."
+        "- **libfixmath** / **fr_math** use **float bridges** in these tables (host and MCU harness); "
+        "native `fix16_t` / radix `s32` calls are usually faster."
     )
     buf.append(
-        "- **Ratios vs libm** are useful *within each column*: they show whether each measured "
-        "row beats the platform’s **`sinf`** / **`sqrtf`** / … **on that silicon**."
+        "- **ESP32-only** peers (**FastTrig**, **ESP-DSP**, **espp/math**) have `---` in **(host)** "
+        "columns when the POSIX bench does not build that implementation."
     )
     buf.append(
-        "- **libfixmath** / **fr_math** rows are **bridged harness timings**: "
-        "`float`→fixed→function→`float`. They are included for comparison continuity, "
-        "but are not native `fix16_t` / `s32` pipeline timing."
-    )
-    buf.append(
-        "- Unsupported cells are shown as `---`. Some ESP32-only peers do not run on the POSIX host "
-        "benchmark, and some libraries do not provide scalar implementations for every function."
+        "- `---` means the row was unsupported or not present in the captured ESP32-S3 snapshot. "
+        "Refresh `MCU_BENCHMARK_SNAPSHOT_ESP32S3.md` after changing the shared benchmark row set."
     )
     buf.append("")
-    buf.append("All ratios are shown with six digits after the decimal point.")
-    buf.append("")
-    buf.append("## Speed vs libm — Host | MCU")
+    buf.append(
+        "Numeric formatting matches the snapshots (six digits after the decimal where applicable). "
+        "Unsupported cells: `---`."
+    )
     buf.append("")
 
-    for lib_key, lib_title in LIBS_DISPLAY:
-        buf.append(f"### {lib_title.replace('**', '')}")
+    if host_acc and mcu_acc:
+        host_order, host_acc_data, host_met = host_acc
+        mcu_order, mcu_acc_data, mcu_met = mcu_acc
+        fn_acc = merge_orders(host_order, mcu_order)
+        met = host_met or mcu_met or {}
+        buf.extend(
+            emit_unified_table(
+                "Accuracy",
+                "Same metric meanings as the snapshots: `abs %FS`, `abs`, `abs rad`, `rel %` as in the `Metric` column.",
+                fn_acc,
+                host_acc_data,
+                mcu_acc_data,
+                met,
+            )
+        )
+
+    if host_mse and mcu_mse:
+        host_order, host_mse_data, host_met = host_mse
+        mcu_order, mcu_mse_data, mcu_met = mcu_mse
+        fn_mse = merge_orders(host_order, mcu_order)
+        met = host_met or mcu_met or {}
+        buf.extend(
+            emit_unified_table(
+                "Accuracy — mean squared error",
+                "MSE uses the same metric units as the peak-error table, squared.",
+                fn_mse,
+                host_mse_data,
+                mcu_mse_data,
+                met,
+            )
+        )
+
+    if host_wall and mcu_wall:
+        host_order, host_w_data, _ = host_wall
+        mcu_order, mcu_w_data, _ = mcu_wall
+        fn_w = merge_orders(host_order, mcu_order)
+        buf.extend(
+            emit_unified_table(
+                "Wall-clock time (microseconds)",
+                "Total microseconds for the benchmark loop on each platform (normalized loop shape per snapshot metadata).",
+                fn_w,
+                host_w_data,
+                mcu_w_data,
+                None,
+            )
+        )
+
+    buf.extend(
+        emit_unified_table(
+            "Speed vs libm (ratio)",
+            "`libm` time ÷ implementation time on that platform. **> 1.0** = faster than platform libm for that timed loop. Ratios are rounded to two decimal places.",
+            fn_speed,
+            host_spd_data,
+            mcu_spd_data,
+            None,
+        )
+    )
+
+    if footprint:
+        buf.append("## Compiled Code Size")
         buf.append("")
-        buf.append("| Function | Host ratio | MCU ratio |")
-        buf.append("| :--- | ---:| ---:|")
-        hr = host_tbl.get(lib_key)
-        mr = mcu_tbl.get(lib_key)
-        for fn in FUNCS:
-            hc = hr.get(fn, "---") if hr else "---"
-            mc = mr.get(fn, "---") if mr else "---"
-            if hc.strip() == "---" and mc.strip() == "---":
-                continue
-            buf.append(f"| `{fn}` | {hc} | {mc} |")
+        buf.append(
+            "These object-size rows come from the host comparison build plus any ESP32 peer objects "
+            "available from the LilyGO PlatformIO build. They are library/variant footprints, not "
+            "firmware totals."
+        )
+        buf.append("")
+        buf.extend(footprint)
         buf.append("")
 
     buf.append("---")
     buf.append("")
     buf.append(
-        "<!-- Generated by tools/gen_benchmark_crossplatform.py — "
-        "run: make benchmark-crossplatform -->"
+        "<!-- Generated by tools/gen_benchmark_crossplatform.py — run: make benchmark-crossplatform -->"
     )
 
     OUT_MD.write_text("\n".join(buf) + "\n", encoding="utf-8")

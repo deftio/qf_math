@@ -40,9 +40,15 @@ enum bench_func_idx {
     BENCH_F_ATAN2,
     BENCH_F_SQRT,
     BENCH_F_HYPOT,
+    BENCH_F_HYPOT_FAST2,
     BENCH_F_HYPOT_FAST,
+    BENCH_F_LOG2,
     BENCH_F_LN,
+    BENCH_F_LOG10,
+    BENCH_F_POW2,
     BENCH_F_EXP,
+    BENCH_F_POW10,
+    BENCH_F_POW,
     BENCH_NFUNC
 };
 
@@ -59,10 +65,12 @@ enum bench_lib_idx {
 
 /**
  * acc[func][lib]: max error in the metric named by bench_func_metric(func).
+ * mse[func][lib]: mean squared error in that same metric.
  * time_us[func][lib]: microseconds for the timed loop. Unsupported entries are NAN.
  */
 typedef struct bench_results {
     double acc[BENCH_NFUNC][BENCH_NLIB];
+    double mse[BENCH_NFUNC][BENCH_NLIB];
     double time_us[BENCH_NFUNC][BENCH_NLIB];
 } bench_results_t;
 
@@ -110,7 +118,7 @@ void bench_emit_markdown_tables(FILE *out, const bench_results_t *r, bench_md_st
 
 /**
  * HTML comment + ### MCU benchmark snapshot (metadata row) + --- + tables (MCU captions).
- * Paste UART capture into docs (see `compare/MCU_BENCHMARK_SNAPSHOT.md`).
+ * Paste UART capture into docs (see `compare/MCU_BENCHMARK_SNAPSHOT_<TARGET>.md`).
  */
 void bench_emit_markdown_doc_snapshot(FILE *out, const bench_results_t *r, const char *device_line);
 

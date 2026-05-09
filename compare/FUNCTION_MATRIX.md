@@ -55,7 +55,7 @@ Host **speed** and **`.o` size** snapshots for QF/FR/FX subsets live in `make co
 |------------|----|----|----|-----|------|
 | sqrt | ● | ● | ● | ● `arm_sqrt_f32` | ● |
 | hypot / fast hypot | ● / ● fast8 | ● / ● fast8 | ◐ | ◐ | ● |
-| General `pow(x,y)` | ○ | ○ | ◐ limited | ◐ | ● |
+| General `pow(x,y)` | ● positive `x` | ○ | ◐ limited | ◐ | ● |
 
 ## Waves & envelopes (embedded synth helpers)
 

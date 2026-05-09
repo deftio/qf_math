@@ -71,6 +71,7 @@ static float fasttrig_asin_f(float x) { return iasin(x) * QF_DEG2RAD_K; }
 static float fasttrig_acos_f(float x) { return iacos(x) * QF_DEG2RAD_K; }
 static float fasttrig_atan_f(float x) { return atanFast(x); }
 static float fasttrig_atan2_f(float y, float x) { return atan2Fast(y, x); }
+static float fasttrig_hypot_fast_f(float x, float y) { return hypotFast(x, y); }
 
 static float espdsp_sqrt_f(float x)
 {
@@ -121,6 +122,7 @@ void setup(void)
     bench_run_unary_peer(&s_esp_timer, &sink, &res, BENCH_L_FASTTRIG, BENCH_F_ACOS, fasttrig_acos_f);
     bench_run_unary_peer(&s_esp_timer, &sink, &res, BENCH_L_FASTTRIG, BENCH_F_ATAN, fasttrig_atan_f);
     bench_run_binary_peer(&s_esp_timer, &sink, &res, BENCH_L_FASTTRIG, BENCH_F_ATAN2, fasttrig_atan2_f);
+    bench_run_binary_peer(&s_esp_timer, &sink, &res, BENCH_L_FASTTRIG, BENCH_F_HYPOT_FAST2, fasttrig_hypot_fast_f);
 
     bench_run_unary_peer(&s_esp_timer, &sink, &res, BENCH_L_ESPDSP, BENCH_F_SQRT, espdsp_sqrt_f);
 
@@ -143,7 +145,7 @@ void setup(void)
     bench_emit_markdown_doc_snapshot(stdout, &res, device_line);
     Serial.println(":::: DOC_TABLE_END ::::");
 
-    Serial.println("\n(Copy between DOC_TABLE markers into compare/MCU_BENCHMARK_SNAPSHOT.md)");
+    Serial.println("\n(Copy between DOC_TABLE markers into compare/MCU_BENCHMARK_SNAPSHOT_ESP32S3.md)");
 
     Serial.println("\n(Done — Serial @ 115200 baud)");
 }

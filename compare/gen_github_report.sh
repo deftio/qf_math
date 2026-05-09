@@ -7,6 +7,10 @@ BIN="$ROOT/build/compare/benchmark_suite"
 QF_O="$ROOT/build/qf_math.o"
 QF_LEAN_O="$ROOT/build/qf_math_lean.o"
 FR_O="$ROOT/build/compare/obj/fr_math.o"
+FR_FULL_O="$ROOT/build/compare/obj/fr_math_full.o"
+FR_LEAN_O="$ROOT/build/compare/obj/fr_math_lean.o"
+FASTTRIG_O="$ROOT/examples/lilygo_t_display_s3_bench/.pio/build/lilygo-t-display-s3/libd57/FastTrig/FastTrig.cpp.o"
+XTENSA_SIZE="${XTENSA_SIZE:-$HOME/.platformio/packages/toolchain-xtensa-esp32s3/bin/xtensa-esp32s3-elf-size}"
 
 shopt -s nullglob
 LF_OBJS=( "$ROOT/build/compare/obj"/lf_*.o )
@@ -21,7 +25,7 @@ fi
   echo
   "$BIN" --markdown-body
   echo
-  bash "$ROOT/compare/report_sizes.sh" "$QF_O" "$QF_LEAN_O" "$FR_O" "${LF_OBJS[@]}"
+  FASTTRIG_O="$FASTTRIG_O" XTENSA_SIZE="$XTENSA_SIZE" bash "$ROOT/compare/report_sizes.sh" "$QF_O" "$QF_LEAN_O" "$FR_O" "$FR_FULL_O" "$FR_LEAN_O" "${LF_OBJS[@]}"
   echo
   cat "$ROOT/compare/GITHUB_REPORT_FOOTER.md"
 } > "$OUT"

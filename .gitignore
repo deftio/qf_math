@@ -1,8 +1,52 @@
+# --- Local build trees (Makefile, CMake, IDEs)
 /build/
-examples/esp32s3_benchmark/build/
-examples/esp32s3_benchmark/sdkconfig
-examples/esp32s3_benchmark/sdkconfig.old
-examples/lilygo_t_display_s3_bench/.pio/
+**/build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+CMakeScripts/
+CTestTestfile.cmake
+_deps/
+DartConfiguration.tcl
+Makefile.cmake
+cmake_install.cmake
+install_manifest*.txt
+
+# Compiled objects / libraries / binaries
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.so.*
+*.dylib
+*.dll
+*.exe
+*.out
+*.app
+compile_commands.json
+*.d           # GCC -MD dependency files
+
+# PlatformIO / embedded toolchains
+.pio/
+
+# ESP-IDF / Arduino sketch exports (often regenerated)
+**/sdkconfig
+**/sdkconfig.old
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Coverage / sanitizers (keep patterns if tooling adds more)
 *.gcda
 *.gcno
 *.gcov
+
+# OS / editors
+.DS_Store

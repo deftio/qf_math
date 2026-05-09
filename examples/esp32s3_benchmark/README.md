@@ -8,7 +8,7 @@ This is an **ESP-IDF** app that links **`qf_math`** together with **libfixmath**
 - **Accuracy** checks versus double references (same grids as the host harness).
 - **Important:** fixed-point peers are still exercised **through float bridges** here — same caveat as [`compare/README.md`](../../compare/README.md) § Float vs fixed-point. For native `fix16_t` / radix-`s32` timings you would add separate loops later.
 
-The UART log ends with Markdown between serial markers `:::: DOC_TABLE_START ::::` and `:::: DOC_TABLE_END ::::`. The checked-in **`MCU_BENCHMARK_SNAPSHOT.md`** is refreshed from the LilyGO PlatformIO build via **`make mcu-benchmark-snapshot`** (same kernels).
+The UART log ends with Markdown between serial markers `:::: DOC_TABLE_START ::::` and `:::: DOC_TABLE_END ::::`. The checked-in **`MCU_BENCHMARK_SNAPSHOT_ESP32S3.md`** is refreshed from the LilyGO PlatformIO build via **`make mcu-benchmark-snapshot`** (same kernels).
 
 ## Prerequisites
 
